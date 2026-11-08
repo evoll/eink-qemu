@@ -19,7 +19,7 @@ env:
 jobs:
 
   Vars:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       VERSION: ${{ steps.Vars.outputs.VERSION }}
       PROJECT_NAME: ${{ steps.Vars.outputs.PROJECT_NAME }}
@@ -294,7 +294,7 @@ jobs:
   # eink-qemu: the desktop app's generated inputs (boot assets), made once
   # on Linux for every desktop build.
   desktop-resources:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - name: Prepare resources
@@ -406,9 +406,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '26'
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v1
         with:
           version: 12.5.1
+          runtime: node@26
+          install: false
 
       - name: Install front-end dependencies
         run: pnpm install --frozen-lockfile
@@ -485,7 +487,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     # eink-qemu: the browser build and its smoke test, and the desktop app, must pass too
     needs: [ Vars, Build, cli, wasm, desktop ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps :
@@ -594,7 +596,7 @@ jobs:
     needs: [ Vars ]
     outputs:
       pages_branch: ${{ env.WASM_PAGES_BRANCH }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -618,9 +620,11 @@ jobs:
         with:
           node-version: '26'
       # eink-qemu: the page is the desktop app's front end built for the browser (package-web.sh)
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/setup@v1
         with:
           version: 12.5.1
+          runtime: node@26
+          install: false
       - name: Test browser modules and shared front end
         run: node --test eink-qemu/wasm/web/*.test.mjs eink-qemu/tests/*.mjs
       - name: Test reproducible SD images
@@ -664,15 +668,15 @@ jobs:
           path: build-wasm/evidence/smoke
           if-no-files-found: warn
       - name: Upload Pages artifact
-        if: github.ref == format('refs/heads/{0}', env.WASM_PAGES_BRANCH) && github.event_name == 'push' && github.repository == 'serialx/eink-qemu'
+        if: github.ref == format('refs/heads/{0}', env.WASM_PAGES_BRANCH) && github.event_name == 'push' && github.repository == 'evoll/eink-qemu'
         uses: actions/upload-pages-artifact@v4
         with:
           path: build-wasm-32limit/web-dist
 
   deploy-wasm:
     needs: wasm
-    if: github.ref == format('refs/heads/{0}', needs.wasm.outputs.pages_branch) && github.event_name == 'push' && github.repository == 'serialx/eink-qemu'
-    runs-on: ubuntu-latest
+    if: github.ref == format('refs/heads/{0}', needs.wasm.outputs.pages_branch) && github.event_name == 'push' && github.repository == 'evoll/eink-qemu'
+    runs-on: ubuntu-24.04
     permissions:
       pages: write
       id-token: write
