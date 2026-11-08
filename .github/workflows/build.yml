@@ -683,4 +683,4 @@ jobs:
     steps:
       - name: Deploy emulator page
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5.0.1
