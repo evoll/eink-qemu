@@ -67,7 +67,7 @@ static void keys_event(DeviceState *dev, QemuConsole *src, QemuInputEvent *evt)
     int qcode = qemu_input_linux_to_qcode(key->key);
     int k = qcode == Q_KEY_CODE_UP ? KEY_UP : qcode == Q_KEY_CODE_DOWN ? KEY_DOWN
           : qcode == Q_KEY_CODE_LEFT ? KEY_LEFT : qcode == Q_KEY_CODE_RIGHT ? KEY_RIGHT
-          : qcode == Q_KEY_CODE_ENTER ? KEY_CONFIRM
+          : qcode == Q_KEY_CODE_RET ? KEY_CONFIRM
           : qcode == Q_KEY_CODE_ESC || qcode == Q_KEY_CODE_BACKSPACE ? KEY_BACK
           : qcode == Q_KEY_CODE_P ? KEY_POWER : -1;
 

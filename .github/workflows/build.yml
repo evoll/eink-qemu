@@ -100,7 +100,7 @@ jobs:
             run_configure: "./.github/workflows/scripts/configure-macos.sh"
 
           - platform: aarch64-apple-darwin
-            runs_on: macos-14
+            runs_on: macos-15
             shell: bash -e {0}
             run_prerequisites: "./.github/workflows/scripts/prerequisites-macos.sh"
             run_configure: "./.github/workflows/scripts/configure-macos.sh"
@@ -246,7 +246,7 @@ jobs:
       matrix:
         include:
           - platform: aarch64-apple-darwin
-            runs_on: macos-14
+            runs_on: macos-15
           - platform: x86_64-apple-darwin
             runs_on: macos-15-intel
           - platform: x86_64-pc-windows-msvc
@@ -315,7 +315,7 @@ jobs:
       matrix:
         include:
           - platform: aarch64-apple-darwin
-            runs_on: macos-14
+            runs_on: macos-15
             qemu_platform: aarch64-apple-darwin
           - platform: x86_64-apple-darwin
             runs_on: macos-15-intel
