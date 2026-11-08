@@ -34,7 +34,9 @@ Evidence defaults to `build-wasm/evidence/smoke` in either mode.
 C3/S3 bootloaders and licenses, and generates the partition tables and
 CrossPoint's NVS entry with the Python helpers in `eink-qemu/`.
 
-The browser accepts any ESP32-C3 or ESP32-S3 firmware through its picker or
+The browser offers X4 Classic as a separate ESP32-S3 machine profile. Choose it
+in the firmware card when testing X4 Classic firmware; filename detection also
+recognizes the `x4classic` token. The browser accepts any ESP32-C3 or ESP32-S3 firmware through its picker or
 `?flash=<url>`: an app `.bin`, a merged `.bin`, a 16 MiB flash dump, or an
 official X4 Pro `.xota` update. For example, `crosspoint-<ver>-x3-x4.bin` for
 the X3 and `crosspoint-<ver>-x4pro.bin` for the X4 Pro from the
@@ -150,7 +152,7 @@ GPSPI CMD reads and direct TB tail chaining from the earlier stack:
 ### Compatibility
 
 Both address modes have passed build/smoke checks; this timing series uses only
-`MEMORY64=2`. The hosted page is <https://serialx.github.io/eink-qemu/>.
+`MEMORY64=2`. The hosted page is <https://evoll.github.io/eink-qemu/>.
 Official CrossPoint 1.6.5 X4 Pro now reaches Home in native, Node and Chrome,
 including accurate and turbo modes; the browser verifies Down/Up and a pointer
 tap into Library. This requires the shared-TB CPU context reload, UC8179 timer

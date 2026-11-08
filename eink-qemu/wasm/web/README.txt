@@ -51,7 +51,7 @@ App bytes stay unchanged. No esptool or PlatformIO is needed. Boot asset
 provenance and licenses are in eink-qemu/boot/README.md (boot-provenance.md in
 the package). Unsupported chips, invalid headers and apps exceeding the selected board partition
 are rejected. Full 16 MiB images pass through unchanged.
-The hosted copy is https://serialx.github.io/eink-qemu/ (no firmware included).
+The hosted copy is https://evoll.github.io/eink-qemu/ (no firmware included).
 X4 Pro defaults to UC8279 revision 0x68. Use ?turbo=0 for measured timing.
 Select UC8179 under Display panel in the firmware card, or use ?panel=uc8179, for the older panel.
 Saved panel choices take precedence; this selection does not affect other boards.
@@ -72,7 +72,9 @@ Alternatively put copies of your images in web-dist and open:
   http://127.0.0.1:8000/?flash=crosspoint-1.6.5-x3-x4.bin&sd=sd.img
 Query images must be same-origin or provide appropriate CORS/CORP headers.
 Each firmware's device is remembered between visits. New firmware defaults
-to X3 for ESP32-C3 and X4 Pro for ESP32-S3. Filename tokens of ASCII letters
+to X3 for ESP32-C3 and X4 Pro for ESP32-S3. X4 Classic is available as a
+separate ESP32-S3 profile; choose it in the device selector or use the
+x4classic filename token. Filename tokens of ASCII letters
 and digits ignore case and select X4 with x4 but no x3,
 X3 with x3 but no x4, or Picco with picco on S3. Both x3 and x4, or neither,
 use the C3 default; x4pro is a separate token. Folder names and hints for the

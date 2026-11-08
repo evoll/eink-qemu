@@ -1,7 +1,9 @@
 # eink-qemu: instructions for helper agents
 
 eink-qemu is based on upstream **QEMU 11.1.2**, with ported Espressif SoC models,
-and simulates the **Xteink X4 Pro** (ESP32-S3R8, 16 MB flash, 8 MB octal PSRAM) closely enough to run **any
+and simulates the **Xteink X4 Pro** (ESP32-S3R8, 16 MB flash, 8 MB octal PSRAM)
+and provides a separate **Xteink X4 Classic** ESP32-S3 machine profile, closely
+enough to run **any
 unmodified X4 Pro firmware**: the stock firmware, CrossInk, CrossDink, or a bare
 ESP-IDF/Arduino app. It also simulates the **Xteink X3** (ESP32-C3; see the X3
 section) for the CrossPoint X3/X4 binary. The goal is firmware development without the physical device:
@@ -51,7 +53,7 @@ porting branches, layer ownership, build command and commit rules.
 
 ## Repo, branches, workflow
 
-- Repo: `serialx/eink-qemu`. Integration branch: **`main`** (base: upstream
+- Repository: [`evoll/eink-qemu`](https://github.com/evoll/eink-qemu). Integration branch: **`main`** (base: upstream
   QEMU 11.1.2).
 - Upstream project: `prokrypt/x4prosim`.
 - Work on your own branch off `main` (name it `ext/<area>`, e.g. `ext/i2c`) and
@@ -451,7 +453,8 @@ The artifact contains both emulators, ROMs, browser assets, boot assets from
 it contains no firmware apps or user SD images.
 
 Pages uploads and deploys only on **pushes to `main` in
-`serialx/eink-qemu`**, to <https://serialx.github.io/eink-qemu/>.
+[`evoll/eink-qemu`](https://github.com/evoll/eink-qemu)**, to
+<https://evoll.github.io/eink-qemu/>.
 `WASM_PAGES_BRANCH` in the workflow is the single branch setting;
 other branches, PRs and forks do not
 deploy. The repository has **Settings > Pages > Source: GitHub Actions** enabled

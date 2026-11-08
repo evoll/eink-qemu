@@ -15,9 +15,9 @@ tools assume ESP-IDF and nothing more about the firmware; what they know
 about particular firmware (CrossPoint's boot milestones and render times,
 the stock firmware's boot gate) is data in [eink-qemu/profiles](eink-qemu/profiles/README.md).
 
-**Try it now in your browser:** https://serialx.github.io/eink-qemu/
+**Try it now in your browser:** https://evoll.github.io/eink-qemu/
 
-<a href="https://serialx.github.io/eink-qemu/"><picture>
+<a href="https://evoll.github.io/eink-qemu/"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="eink-qemu/screenshots/browser-dark.png">
   <img src="eink-qemu/screenshots/browser-light.png" alt="The eink-qemu browser emulator running CrossPoint on an Xteink X4 Pro, showing a page of Aesop's Fables, with the SD card files on the left and the firmware console on the right">
 </picture></a>
@@ -32,18 +32,20 @@ and Kohei Tokunaga's WebAssembly JIT. Where each piece came from is in
 | Board | SoC | Machine | Emulator binary | Fidelity |
 | --- | --- | --- | --- | --- |
 | Xteink X4 Pro | ESP32-S3 | `x4pro` | `qemu-system-xtensa` | Full board; CPU, PSRAM, SD, SPI and UC8279 timing [calibrated on a real X4 Pro](eink-qemu/x4cal/README.md) |
+| Xteink X4 Classic | ESP32-S3 | `x4classic` | `qemu-system-xtensa` | Dedicated board profile and input mapping; hardware behavior still needs validation against a real X4 Classic |
 | Xteink X3 | ESP32-C3 | `x3` | `qemu-system-riscv32` | Full board, SD, panel and CPU timing calibrated on a real X3 |
 | Xteink X4 | ESP32-C3 | `x4` | `qemu-system-riscv32` | Runs firmware; panel refresh timing simplified, no ghosting |
 | BOOX Picco | ESP32-S3 | `picco` | `qemu-system-xtensa` | Runs firmware; panel waveforms and charging simplified |
 
-The board defaults to X4 Pro for ESP32-S3 firmware and X3 for ESP32-C3.
-The desktop app, browser and Rust CLI also recognize X4 and Picco filename
-hints, as described below. Select the board explicitly when the default or
+The board defaults to X4 Pro for ESP32-S3 firmware and X3 for ESP32-C3. The
+X4 Classic is available as a separate ESP32-S3 profile. The desktop app,
+browser and Rust CLI also recognize X4 Classic, X4 and Picco filename hints,
+as described below. Select the board explicitly when the default or
 filename hint does not match the device.
 
 ## Try it in the browser
 
-1. Open https://serialx.github.io/eink-qemu/ in Chrome. Firefox and Safari are
+1. Open https://evoll.github.io/eink-qemu/ in Chrome. Firefox and Safari are
    untested.
 2. Choose the **Firmware**: a release app `.bin` (a CrossPoint release, for
    example), a merged firmware `.bin`, an X4 Pro `.xota` update, or a 16 MiB
