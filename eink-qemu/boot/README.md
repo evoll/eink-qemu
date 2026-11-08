@@ -97,3 +97,6 @@ The firmware mounts LittleFS using the label `spiffs`. The composer provisions
 the remaining `0xB0000` bytes at `0xF50000` for it. This is a simulator choice;
 the original filesystem partition bounds are not present in the supplied app.
 Picco NVS is initially erased, and the bundled ESP32-S3 bootloader is reused.
+
+
+Xteink X4 Pro and X4 Classic use dedicated dual-OTA 16 MiB layouts. The X4 Classic table is `partitions-x4classic.csv`; X4 Pro is `partitions-x4pro.csv`.

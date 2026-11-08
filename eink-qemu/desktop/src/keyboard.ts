@@ -32,7 +32,7 @@ export function keyTitle(machine: string, name: string): string {
 }
 
 export function keyboardHint(machine: string): string {
-  return machine === 'x3' || machine === 'x4' ? 'Keyboard: arrows · Enter · Esc / Backspace · hold P for a long press'
+  return machine === 'x3' || machine === 'x4' || machine === 'x4classic' ? 'Keyboard: arrows · Enter · Esc / Backspace · hold P for a long press'
     : machine === 'picco' ? 'Keyboard: ↑ ↓ · hold P for a long press · touch the screen'
     : 'Keyboard: ↑ ↓ · Esc / H / Home · hold P for a long press · touch the screen';
 }

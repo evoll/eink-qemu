@@ -39,6 +39,7 @@ impl Chip {
         match self {
             Self::C3 if has("x4") && !has("x3") => "x4",
             Self::S3 if has("picco") => "picco",
+            Self::S3 if has("x4classic") || has("x4c") => "x4classic",
             _ => devices[0],
         }
     }
@@ -47,7 +48,7 @@ impl Chip {
     pub fn devices(self) -> &'static [&'static str] {
         match self {
             Chip::C3 => &["x3", "x4"],
-            Chip::S3 => &["x4pro", "picco"],
+            Chip::S3 => &["x4pro", "x4classic", "picco"],
         }
     }
 }

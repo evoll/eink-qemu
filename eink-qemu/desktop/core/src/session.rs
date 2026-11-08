@@ -628,7 +628,7 @@ impl Session {
         self.current().map(|run| run.command.clone())
     }
 
-    /// The running board ("x3", "x4", "x4pro", "picco").
+    /// The running board ("x3", "x4", "x4pro", "x4classic", "picco").
     pub fn machine(&self) -> Option<String> {
         self.current().map(|run| run.machine.clone())
     }
@@ -773,7 +773,7 @@ impl Session {
         }
         args.extend([
             "-machine".into(),
-            if machine == "x4pro" { format!("x4pro,panel={}", options.panel) } else { machine.to_string() },
+            if machine == "x4pro" || machine == "x4classic" { format!("{machine},panel={}", options.panel) } else { machine.to_string() },
             "-icount".into(),
             // Idle time defaults to real time (sleep=on): with native
             // speed, sleep=off would run a resting device through minutes of
@@ -798,7 +798,7 @@ impl Session {
             }
         }
         if let Some(ms) = options.power_hold_ms {
-            let keys = if machine == "x3" || machine == "x4" { "x3-keys" } else { "x4pro-keys" };
+            let keys = if machine == "x3" || machine == "x4" { "x3-keys" } else if machine == "x4classic" { "x4classic-keys" } else { "x4pro-keys" };
             args.extend(["-global".into(), format!("{keys}.power-boot-ms={ms}")]);
         }
         args.extend([

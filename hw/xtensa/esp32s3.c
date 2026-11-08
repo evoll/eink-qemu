@@ -362,6 +362,7 @@ struct Esp32s3MachineState {
 };
 #define TYPE_ESP32S3_MACHINE MACHINE_TYPE_NAME("esp32s3")
 #define TYPE_X4PRO_MACHINE MACHINE_TYPE_NAME("x4pro")
+#define TYPE_X4CLASSIC_MACHINE MACHINE_TYPE_NAME("x4classic")
 #define TYPE_PICCO_MACHINE MACHINE_TYPE_NAME("picco")
 
 static void esp32s3_init_openeth(Esp32s3SocState *ms)
@@ -648,6 +649,7 @@ static void esp32s3_soc_add_unimp_device(MemoryRegion *dest, const char* name, h
 }
 
 static void x4pro_board_init(Esp32s3SocState *ss, DeviceState *spi2);
+static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2);
 static void picco_board_init(Esp32s3SocState *ss, DeviceState *spi2);
 
 static ram_addr_t esp32s3_fixup_ram_size(ram_addr_t requested_size);
@@ -942,6 +944,7 @@ static void esp32s3_machine_init(MachineState *machine)
 
     /* RGB display realization; the X4 Pro has its own panel, keep it console 0 */
     if (object_dynamic_cast(OBJECT(machine), TYPE_X4PRO_MACHINE) ||
+        object_dynamic_cast(OBJECT(machine), TYPE_X4CLASSIC_MACHINE) ||
         object_dynamic_cast(OBJECT(machine), TYPE_PICCO_MACHINE)) {
         object_unparent(OBJECT(&ss->rgb));
     } else {
@@ -1072,6 +1075,8 @@ static void esp32s3_machine_init(MachineState *machine)
                            qdev_get_gpio_in(intmatrix_dev, ETS_SPI2_INTR_SOURCE));
         if (object_dynamic_cast(OBJECT(machine), TYPE_X4PRO_MACHINE)) {
             x4pro_board_init(ss, spi2);
+        } else if (object_dynamic_cast(OBJECT(machine), TYPE_X4CLASSIC_MACHINE)) {
+            x4classic_board_init(ss, spi2);
         } else if (object_dynamic_cast(OBJECT(machine), TYPE_PICCO_MACHINE)) {
             picco_board_init(ss, spi2);
         }
@@ -1246,6 +1251,54 @@ static void x4pro_board_init(Esp32s3SocState *ss, DeviceState *spi2)
     qdev_connect_gpio_out_named(gpio, ESP32S3_GPIO_OUT, 4, qdev_get_gpio_in_named(touch, "rst", 0));
 }
 
+/*
+ * Xteink X4 Classic: same ESP32-S3 / 800x480 panel family as X4 Pro,
+ * but the display uses DC=14, RST=10, BUSY=18. Seven active-low keys:
+ * Up=GPIO0, Down=GPIO7, Power=GPIO3, Left=GPIO5, Right=GPIO2,
+ * Confirm=GPIO8, Back=GPIO9. No GT911 and no frontlight.
+ * GPIO1 is the panel power rail; GPIO6 is active-low SD power enable.
+ */
+static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
+{
+    Esp32s3MachineState *machine = ESP32S3_MACHINE(qdev_get_machine());
+    DeviceState *gpio = DEVICE(&ss->gpio);
+    SSIBus *bus = (SSIBus *)qdev_get_child_bus(spi2, "spi");
+    DeviceState *panel = qdev_new(machine->uc8279_68 ? "uc8279-68" : "uc8179");
+    qdev_set_id(panel, g_strdup("panel"), &error_fatal);
+    ssi_realize_and_unref(panel, bus, &error_fatal);
+
+    qdev_connect_gpio_out_named(gpio, ESP32S3_GPIO_OUT, 13, qdev_get_gpio_in_named(panel, SSI_GPIO_CS, 0));
+    qdev_connect_gpio_out_named(gpio, ESP32S3_GPIO_OUT, 14, qdev_get_gpio_in_named(panel, "dc", 0));
+    qdev_connect_gpio_out_named(gpio, ESP32S3_GPIO_OUT, 10, qdev_get_gpio_in_named(panel, "rst", 0));
+    qdev_connect_gpio_out_named(panel, "busy", 0, qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 18));
+    qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 18), 1);
+    qdev_connect_gpio_out_named(gpio, ESP32S3_GPIO_OUT, 12, qdev_get_gpio_in_named(panel, "sclk", 0));
+    qdev_connect_gpio_out_named(gpio, ESP32S3_GPIO_OUT, 11, qdev_get_gpio_in_named(panel, "sda", 0));
+    qdev_connect_gpio_out_named(panel, "sda-out", 0, qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 11));
+    qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 11), 1);
+
+    DeviceState *keys = qdev_new("x4classic-keys");
+    object_property_add_child(qdev_get_machine(), "x4classic-keys", OBJECT(keys));
+    static const int key_pins[] = { 0, 7, 5, 2, 8, 9, 3 };
+    for (int k = 0; k < ARRAY_SIZE(key_pins); k++) {
+        qdev_connect_gpio_out(keys, k, qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, key_pins[k]));
+    }
+    x4pro_connect_boot(ss, keys);
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(keys), &error_fatal);
+
+    /* Board rails / unused discrete status inputs. */
+    /* GPIO4 is an unused input on this revision; keep it pulled high. */
+    qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 4), 1);
+    /* GPIO21 is the active-high charge STAT input; no charger is attached. */
+    qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 21), 0);
+
+    DeviceState *i2c0 = DEVICE(object_resolve_path_component(OBJECT(ss), "i2c0"));
+    I2CBus *i2c = I2C_BUS(qdev_get_child_bus(i2c0, "i2c"));
+    x4pro_add_i2c(i2c, "bm8563", 0x51);
+    x4pro_add_i2c(i2c, "cw2017", 0x63);
+    x4pro_add_i2c(i2c, "qmi8658", 0x6b);
+}
+
 static char *x4pro_get_panel(Object *obj, Error **errp)
 {
     Esp32s3MachineState *s = ESP32S3_MACHINE(obj);
@@ -1262,6 +1315,42 @@ static void x4pro_set_panel(Object *obj, const char *value, Error **errp)
         return;
     }
     s->uc8279_68 = !strcmp(value, "uc8279-68");
+}
+
+static void x4classic_machine_class_init(ObjectClass *oc, const void *data)
+{
+    static GlobalProperty globals[] = {
+        { "ssi_psram", "is_octal", "true" },
+        { TYPE_ESP32S3_CACHE, "psram-read-ns", "305" },
+        { TYPE_ESP32S3_CACHE, "psram-write-ns", "390" },
+        { TYPE_ESP32S3_CACHE, "psram-read-tail-ns", "170" },
+        { TYPE_ESP32S3_CACHE, "psram-read-cycles", "8" },
+        { TYPE_ESP32S3_CACHE, "psram-write-cycles", "4" },
+        { "xtensa-cpu", "cost-rom-ns", "4" },
+        { "xtensa-cpu", "cost-sram-ns", "4" },
+        { "xtensa-cpu", "cost-flash-ns", "4" },
+        { "xtensa-cpu", "cost-load", "1" },
+        { "xtensa-cpu", "cost-mul", "5" },
+        { "xtensa-cpu", "cost-div", "47" },
+        { "xtensa-cpu", "cost-branch", "6" },
+        { "xtensa-cpu", "cost-call", "12" },
+        { "xtensa-cpu", "cost-fpu", "2" },
+        { "xtensa-cpu", "cost-fma", "16" },
+        { "xtensa-cpu", "cost-clock-scaling", "true" },
+        { "ssi.esp32s3.gpspi", "transaction-overhead-ns", "650" },
+        { "ssi.esp32s3.gpspi", "transaction-overhead-clocks", "2" },
+        { "dwc_sdmmc", "timing", "true" },
+        { "dwc_sdmmc", "read-latency-us", "315" },
+        { "dwc_sdmmc", "read-ramp-us", "13" },
+        { "dwc_sdmmc", "write-latency-us", "900" },
+        { "dwc_sdmmc", "write-tail-us", "16" },
+    };
+    MachineClass *mc = MACHINE_CLASS(oc);
+    mc->desc = "Xteink X4 Classic (ESP32-S3R8, buttons-only e-paper)";
+    mc->default_ram_size = 8 * MiB;
+    compat_props_add(mc->compat_props, globals, ARRAY_SIZE(globals));
+    object_class_property_add_str(oc, "panel", x4pro_get_panel, x4pro_set_panel);
+    object_class_property_set_description(oc, "panel", "Panel: uc8279-68 (default) or uc8179");
 }
 
 static void x4pro_machine_instance_init(Object *obj)
@@ -1365,6 +1454,13 @@ static const TypeInfo picco_info = {
     .class_init = picco_machine_class_init,
 };
 
+static const TypeInfo x4classic_info = {
+    .name = TYPE_X4CLASSIC_MACHINE,
+    .parent = TYPE_ESP32S3_MACHINE,
+    .class_init = x4classic_machine_class_init,
+    .instance_init = x4pro_machine_instance_init,
+};
+
 static const TypeInfo x4pro_info = {
     .name = TYPE_X4PRO_MACHINE,
     .parent = TYPE_ESP32S3_MACHINE,
@@ -1394,6 +1490,7 @@ static void esp32s3_machine_type_init(void)
 {
     type_register_static(&esp32s3_info);
     type_register_static(&x4pro_info);
+    type_register_static(&x4classic_info);
     type_register_static(&picco_info);
 }
 

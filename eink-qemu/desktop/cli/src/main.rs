@@ -171,7 +171,7 @@ enum Command {
     Flash {
         firmware: PathBuf,
         output: PathBuf,
-        #[arg(long, value_parser = ["x3", "x4", "x4pro", "picco"])]
+        #[arg(long, value_parser = ["x3", "x4", "x4pro", "x4classic", "picco"])]
         machine: Option<String>,
         /// Partition table for an app .bin or a build directory (CSV or binary; default: Arduino-ESP32's 16 MB table).
         #[arg(long, value_name = "CSV|BIN")]
@@ -206,7 +206,7 @@ pub struct RunArgs {
     #[arg(long, value_name = "HOST[=DIR]")]
     pub put: Vec<String>,
     /// Board: x3, x4, x4pro or picco. Default: filename hint, else the chip's default (ESP32-C3 = x3, ESP32-S3 = x4pro).
-    #[arg(long, value_parser = ["x3", "x4", "x4pro", "picco"])]
+    #[arg(long, value_parser = ["x3", "x4", "x4pro", "x4classic", "picco"])]
     pub machine: Option<String>,
     /// X4 Pro display panel: uc8279-68 or uc8179.
     #[arg(long, default_value = "uc8279-68", value_parser = ["uc8279-68", "uc8179"])]

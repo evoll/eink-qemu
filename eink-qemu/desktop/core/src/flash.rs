@@ -21,6 +21,8 @@ const ENTRY_SIZE: usize = 32;
 const BOOT_C3: &[u8] = include_bytes!("../../../boot/bootloader-esp32c3.bin");
 const BOOT_S3: &[u8] = include_bytes!("../../../boot/bootloader-esp32s3.bin");
 const PARTITIONS: &str = include_str!("../../../boot/partitions.csv");
+const PARTITIONS_X4PRO: &str = include_str!("../../../boot/partitions-x4pro.csv");
+const PARTITIONS_X4CLASSIC: &str = include_str!("../../../boot/partitions-x4classic.csv");
 const PARTITIONS_PICCO: &str = include_str!("../../../boot/partitions-picco.csv");
 
 /// A composed image and what it is for.
@@ -554,6 +556,8 @@ pub fn make_flash_with(source: &Path, machine: Option<&str>, partitions: Option<
     let (table, partitions) = match given {
         Some(table) => (table, given_name()),
         None if machine == Some("picco") => (partition_table(PARTITIONS_PICCO)?, "the Picco's stock layout (bundled)".into()),
+        None if machine == Some("x4pro") => (partition_table(PARTITIONS_X4PRO)?, "the X4 Pro partition layout (bundled)".into()),
+        None if machine == Some("x4classic") => (partition_table(PARTITIONS_X4CLASSIC)?, "the X4 Classic partition layout (bundled)".into()),
         None => (partition_table(PARTITIONS)?, "Arduino-ESP32's 16 MB default (bundled)".into()),
     };
     let (image, chip, nvs_seed) = compose(&data, boot, &table, machine)?;
@@ -677,7 +681,7 @@ mod tests {
 
     #[test]
     fn bundled_tables_parse() {
-        for csv in [PARTITIONS, PARTITIONS_PICCO] {
+        for csv in [PARTITIONS, PARTITIONS_X4PRO, PARTITIONS_X4CLASSIC, PARTITIONS_PICCO] {
             let table = partition_table(csv).unwrap();
             assert_eq!(table.len(), TABLE_SIZE);
             assert!(!read_partitions(&table).unwrap().is_empty());

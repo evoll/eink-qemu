@@ -41,7 +41,7 @@ def detect_chip(data, machine=None):
     chip = struct.unpack_from("<H", data, 12)[0]
     if chip not in CHIPS:
         raise ValueError(f"unsupported ESP chip ID {chip}; expected 5 (C3) or 9 (S3)")
-    if machine and {"x3": 5, "x4": 5, "x4pro": 9, "picco": 9}.get(machine) != chip:
+    if machine and {"x3": 5, "x4": 5, "x4pro": 9, "x4classic": 9, "picco": 9}.get(machine) != chip:
         raise ValueError(f"--machine {machine} conflicts with {CHIPS[chip][1]} image")
     return chip
 
@@ -302,7 +302,7 @@ def make_flash(source, machine=None, partitions=None):
         return data.ljust(FLASH_SIZE, b'\xff')
     boot = (BOOT_DIR / f"bootloader-{CHIPS[chip][1]}.bin").read_bytes()
     if table is None:
-        table = partition_table(BOOT_DIR / ("partitions-picco.csv" if machine == "picco" else "partitions.csv"))
+        table = partition_table(BOOT_DIR / ("partitions-picco.csv" if machine == "picco" else "partitions-x4classic.csv" if machine == "x4classic" else "partitions-x4pro.csv" if machine == "x4pro" else "partitions.csv"))
     return compose(data, boot, table, machine)
 
 
@@ -310,7 +310,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="app or merged .bin, build directory, or 16 MiB image")
     parser.add_argument("output", type=Path)
-    parser.add_argument("--machine", choices=("x3", "x4", "x4pro", "picco"),
+    parser.add_argument("--machine", choices=("x3", "x4", "x4pro", "x4classic", "picco"),
                         help="select the board's app layout and check the detected chip")
     parser.add_argument("--partitions", type=Path, metavar="CSV|BIN",
                         help="partition table for an app or build directory (default: "

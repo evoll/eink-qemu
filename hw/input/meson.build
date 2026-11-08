@@ -12,5 +12,5 @@ system_ss.add(when: 'CONFIG_VIRTIO_INPUT', if_true: files('virtio-input-hid.c'))
 system_ss.add(when: 'CONFIG_VIRTIO_INPUT_HOST', if_true: files('virtio-input-host.c'))
 
 system_ss.add(when: 'CONFIG_LASIPS2', if_true: files('lasips2.c'))
-system_ss.add(when: 'CONFIG_XTENSA_ESP32S3', if_true: files('x4pro_keys.c'))
+system_ss.add(when: 'CONFIG_XTENSA_ESP32S3', if_true: files('x4pro_keys.c', 'x4classic_keys.c'))
 system_ss.add(when: 'CONFIG_RISCV_ESP32C3', if_true: files('x3_keys.c'))

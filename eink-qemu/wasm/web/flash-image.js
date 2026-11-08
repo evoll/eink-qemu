@@ -6,7 +6,7 @@
 globalThis.FlashImage = (() => {
     function selectMachine(chip, selected = 'auto') {
         if (chip !== 5 && chip !== 9) throw new Error(`Unsupported ESP chip ID ${chip}.`);
-        const chips = {x3: 5, x4: 5, x4pro: 9, picco: 9};
+        const chips = {x3: 5, x4: 5, x4pro: 9, x4classic: 9, picco: 9};
         if (selected === 'auto') {
             return chip === 5 ? 'x3' : 'x4pro';
         }
@@ -15,17 +15,18 @@ globalThis.FlashImage = (() => {
         return selected;
     }
     function appLayout(machine) {
-        if (!['x3', 'x4', 'x4pro', 'picco'].includes(machine)) {
+        if (!['x3', 'x4', 'x4pro', 'x4classic', 'picco'].includes(machine)) {
             throw new Error(`Unknown device: ${machine}.`);
         }
         const picco = machine === 'picco', c3 = machine === 'x3' || machine === 'x4';
+        const x4Family = machine === 'x4pro' || machine === 'x4classic';
         return Object.freeze({
             appOffset: picco ? 0xe0000 : 0x10000,
-            appSize: picco ? 0xe70000 : 0x640000,
+            appSize: picco ? 0xe70000 : x4Family ? 0x7e0000 : 0x640000,
             otaOffset: picco ? 0x15000 : 0xe000,
             bootAsset: `bootloader-${c3 ? 'esp32c3' : 'esp32s3'}.bin`,
-            partitionAsset: picco ? 'partitions-picco.bin' : 'partitions.bin',
-            partitionTable: picco ? 'the stock BOOX Picco partition table' : 'the Arduino-ESP32 16 MB partition table'
+            partitionAsset: picco ? 'partitions-picco.bin' : machine === 'x4classic' ? 'partitions-x4classic.bin' : machine === 'x4pro' ? 'partitions-x4pro.bin' : 'partitions.bin',
+            partitionTable: picco ? 'the stock BOOX Picco partition table' : x4Family ? `the stock ${machine === 'x4classic' ? 'X4 Classic' : 'X4 Pro'} partition table` : 'the Arduino-ESP32 16 MB partition table'
         });
     }
     function readPartitions(bytes, offset = 0) {

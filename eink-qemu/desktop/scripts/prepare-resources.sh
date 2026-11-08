@@ -24,6 +24,8 @@ mknvs = import_module('eink-qemu.mknvs')
 table = mkflash.partition_table()
 (boot / 'partitions.bin').write_bytes(table)
 (boot / 'partitions-picco.bin').write_bytes(mkflash.partition_table(mkflash.BOOT_DIR / 'partitions-picco.csv'))
+(boot / 'partitions-x4pro.bin').write_bytes(mkflash.partition_table(mkflash.BOOT_DIR / 'partitions-x4pro.csv'))
+(boot / 'partitions-x4classic.bin').write_bytes(mkflash.partition_table(mkflash.BOOT_DIR / 'partitions-x4classic.csv'))
 nvs_size = next(size for magic, kind, subtype, _, size in
                 (struct.unpack_from('<HBBII', table, at) for at in range(0, len(table), 32))
                 if magic == 0x50aa and (kind, subtype) == (1, 2))
