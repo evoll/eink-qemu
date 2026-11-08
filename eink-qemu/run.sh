@@ -2,7 +2,7 @@
 # Boot an X4 Pro, X4 or X3 flash image in eink-qemu. USB-CDC console (the firmware log) -> stdout.
 # usage: eink-qemu/run.sh flash.bin [sd.img] [extra qemu args...]
 # The machine follows the image's chip (byte 12 of the bootloader header): ESP32-S3 -> x4pro,
-# ESP32-C3 -> x3. X4MACHINE=x3|x4|x4pro|picco overrides.
+# ESP32-C3 -> x3. X4MACHINE=x3|x4|x4pro|x4classic|picco overrides.
 # X4 Pro defaults to measured UC8279 revision 0x68; X4PANEL=uc8179 selects the legacy panel.
 # Wi-Fi: "PICSimLabWifi" uses NAT, forwarding host port 8080 to guest port 80.
 #   X4WIFI_MODE=bridge opts into LAN bridging; X4BR selects the interface.
@@ -24,7 +24,7 @@ if [ "$X4MACHINE" = x3 ] || [ "$X4MACHINE" = x4 ]; then
 else
   qemu=$here/build/qemu-system-xtensa
   icount_shift=2
-  [ "$X4MACHINE" = x4pro ] && icount_shift=0
+  [ "$X4MACHINE" = x4pro ] || [ "$X4MACHINE" = x4classic ] && icount_shift=0
 fi
 # release archives have the binaries in bin/ instead of build/
 [ -x "$qemu" ] || qemu=$here/bin/${qemu##*/}

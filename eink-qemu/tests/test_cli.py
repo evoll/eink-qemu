@@ -68,6 +68,16 @@ def records(stdout):
     return [json.loads(line) for line in stdout.splitlines() if line.startswith('{')]
 
 
+class TurboArgs(unittest.TestCase):
+    def test_all_machines_have_turbo_arguments(self):
+        script = ROOT / "eink-qemu/turbo-args.sh"
+        for machine in ("x3", "x4", "x4pro", "x4classic", "picco"):
+            with self.subTest(machine=machine):
+                result = subprocess.run(["sh", str(script), machine], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(result.stdout.strip())
+
+
 def qmp(binary, machine, commands, extra=()):
     script = '{"execute":"qmp_capabilities"}\n' + ''.join(json.dumps(c) + '\n' for c in commands) + '{"execute":"quit"}\n'
     out = subprocess.run([str(binary), '-machine', machine, '-display', 'none', '-serial', 'null',

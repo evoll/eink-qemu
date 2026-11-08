@@ -20,13 +20,13 @@ machine = os.environ.get("X4MACHINE") or ("x3" if chip == 5 else "x4pro")
 qemu = os.path.join(here, "..", "build", "qemu-system-riscv32" if machine in ("x3", "x4") else "qemu-system-xtensa")
 if not os.path.exists(qemu):    # release archives have the binaries in bin/
     qemu = os.path.join(here, "..", "bin", os.path.basename(qemu))
-keys = "x3-keys" if machine in ("x3", "x4") else "picco-keys" if machine == "picco" else "x4pro-keys"
+keys = "x3-keys" if machine in ("x3", "x4") else "picco-keys" if machine == "picco" else "x4classic-keys" if machine == "x4classic" else "x4pro-keys"
 sock = f"/tmp/eink-qemu-{os.getpid()}.sock"
 if not os.path.exists(sd):
     subprocess.run([sys.executable, os.path.join(here, "mksd.py"), sd], check=True)
 subprocess.run(["cp", img, img + ".run"], check=True)
 # X3 regional instruction costs are nanoseconds; Xtensa keeps 4 ns ticks.
-icount_shift = 0 if machine in ("x3", "x4", "x4pro") else 2
+icount_shift = 0 if machine in ("x3", "x4", "x4pro", "x4classic") else 2
 machine_args = machine
 if machine == "x4pro" and os.environ.get("X4PANEL"):
     machine_args += ",panel=" + os.environ["X4PANEL"]

@@ -79,7 +79,7 @@ window.addEventListener('blur', () => homeKey(false));
 function turboProperties(machine) {
     const properties = [
         // The X4 Pro and Picco cards sit on the S3's SDMMC host, not on SPI.
-        ...(machine === 'x4pro' || machine === 'picco' ? [] : ['read-access-us', 'read-seq-access-us', 'read-repeat-us', 'read-next-us',
+        ...(machine === 'x4pro' || machine === 'x4classic' || machine === 'picco' ? [] : ['read-access-us', 'read-seq-access-us', 'read-repeat-us', 'read-next-us',
             'write-busy-us', 'write-random-busy-us', 'write-repeat-busy-us',
             'write-block-busy-us', 'write-stop-busy-us', 'write-stop-decrement-us',
             'write-stop-random-extra-us'].map(name => `ssi-sd.${name}=0`)),
