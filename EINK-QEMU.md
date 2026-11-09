@@ -19,6 +19,34 @@ firmware may use the same chip differently (hardware SPI CS, DMA, other panel
 commands). CrossDink (`prokrypt/CrossDink`, read-only for you) is the reference
 firmware for testing because its drivers are readable and it logs a lot.
 
+## X4 Classic hardware profile
+
+The X4 Classic firmware board profile specifies an 800 × 480 SPI e-paper
+panel at 10 MHz: SCLK GPIO12, MOSI GPIO11, CS GPIO13, DC GPIO14, reset GPIO10,
+and BUSY GPIO18. The QEMU board wiring uses these same signal pins. The
+firmware profile's seven active-low keys are Back GPIO9, Confirm GPIO8,
+Left GPIO5, Right GPIO2, Up GPIO0, Down GPIO7, and Power GPIO3. The QEMU key
+mapping is aligned to that order; in particular, Up and Down are GPIO0 and
+GPIO7 respectively.
+
+The 1-bit SDMMC firmware pinout is CLK GPIO41, CMD GPIO42, DAT0 GPIO40;
+GPIO6 controls its power rail active-low. The shared I2C bus is SDA GPIO39 and
+SCL GPIO38 (firmware-configured at 400 kHz), with CW2017 at `0x63` and BM8563
+at `0x51`. Charge status is GPIO21; the emulator holds this input low so the firmware exposes battery/charging status in the emulated UI. GPIO1 is the active-high power latch.
+GPIO4 is unused. The Classic has no touch controller or front light.
+
+**Current emulation limits:** the QEMU Classic profile attaches BM8563 and
+CW2017 to I2C, but does not yet model the GPIO1 power-latch sequence, GPIO6 SD
+power gating, or GPIO21 charger status. SDMMC access is provided by the SoC's
+SD card model; board-level power switching is not represented. The board
+profile does not yet implement the firmware's NVS `hw_calib/screenType`
+controller-selection algorithm or bounded three-byte probing. Select the
+panel controller explicitly with the machine's `panel` property where
+available. UC8179, UC8279-68 and SSD1677 are selectable Classic panel models. The firmware binary identifies the `hw_calib/screenType` values as UC8179 (1/0x0B), UC8279 (2/0x0C) and SSD1677 (3); QEMU currently requires an explicit panel selection rather than reproducing the firmware NVS/probe algorithm. Automatic UC8279 variant/grayscale selection is not implemented.
+The firmware's CW2017 BATINFO/restart policy is not emulated as a dedicated
+board power policy. These limitations are intentionally documented rather
+than approximated with incorrect GPIO levels or fabricated sensor behavior.
+
 ## Benchmarking firmware
 
 **The CLI defaults to `--sleep off` for scripted runs and benchmarks.**

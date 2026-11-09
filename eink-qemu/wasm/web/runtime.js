@@ -232,11 +232,11 @@ window.addEventListener('message', async ({source, origin, data}) => {
         window.Module = {
             browserNetwork,
             canvas,
-            arguments: ['-L', '/', '-machine', machine === 'x4pro' ? `${machine},panel=${panel}` : machine,
+            arguments: ['-L', '/', '-machine', (machine === 'x4pro' || machine === 'x4classic') ? `${machine},panel=${panel}` : machine,
                 '-accel', 'tcg,tb-size=64',
                 '-icount', `shift=${machine === 'picco' ? 2 : 0},sleep=${sleep}`,
                 ...(turbo ? turboProperties(machine) : []),
-                ...((machine === 'x4' || machine === 'picco') ? [] : ['-global', `${machine === 'x3' ? 'uc8279' : 'uc8179'}.ghosting=${ghosting ? 'on' : 'off'}`]),
+                ...((machine === 'x4' || machine === 'picco' || panel === 'ssd1677') ? [] : ['-global', `${machine === 'x3' ? 'uc8279' : 'uc8179'}.ghosting=${ghosting ? 'on' : 'off'}`]),
                 '-drive', 'file=/flash.bin,if=mtd,format=raw,cache.direct=off',
                 '-drive', 'file=/sd.img,if=sd,format=raw,cache.direct=off',
                 '-chardev', 'stdio,id=cdc', '-serial', 'null', '-parallel', 'none',

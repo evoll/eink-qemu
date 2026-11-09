@@ -359,6 +359,7 @@ struct Esp32s3MachineState {
     Esp32s3SocState esp32s3;
     DeviceState *flash_dev;
     bool uc8279_68;
+    bool ssd1677;
 };
 #define TYPE_ESP32S3_MACHINE MACHINE_TYPE_NAME("esp32s3")
 #define TYPE_X4PRO_MACHINE MACHINE_TYPE_NAME("x4pro")
@@ -1252,18 +1253,19 @@ static void x4pro_board_init(Esp32s3SocState *ss, DeviceState *spi2)
 }
 
 /*
- * Xteink X4 Classic: same ESP32-S3 / 800x480 panel family as X4 Pro,
- * but the display uses DC=14, RST=10, BUSY=18. Seven active-low keys:
- * Up=GPIO0, Down=GPIO7, Power=GPIO3, Left=GPIO5, Right=GPIO2,
- * Confirm=GPIO8, Back=GPIO9. No GT911 and no frontlight.
- * GPIO1 is the panel power rail; GPIO6 is active-low SD power enable.
+ * Xteink X4 Classic: ESP32-S3, 800x480 SPI panel. Display pins are
+ * SCLK=12, MOSI=11, CS=13, DC=14, RST=10, BUSY=18. Seven active-low
+ * keys: Up=GPIO0, Down=GPIO7, Left=GPIO5, Right=GPIO2, Confirm=GPIO8,
+ * Back=GPIO9, Power=GPIO3. No touch controller or front light.
+ * GPIO1 is the active-high power latch; GPIO6 is active-low SD power.
  */
 static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
 {
     Esp32s3MachineState *machine = ESP32S3_MACHINE(qdev_get_machine());
     DeviceState *gpio = DEVICE(&ss->gpio);
     SSIBus *bus = (SSIBus *)qdev_get_child_bus(spi2, "spi");
-    DeviceState *panel = qdev_new(machine->uc8279_68 ? "uc8279-68" : "uc8179");
+    DeviceState *panel = qdev_new(machine->ssd1677 ? "ssd1677" :
+                                  machine->uc8279_68 ? "uc8279-68" : "uc8179");
     qdev_set_id(panel, g_strdup("panel"), &error_fatal);
     ssi_realize_and_unref(panel, bus, &error_fatal);
 
@@ -1291,12 +1293,10 @@ static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
     qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 4), 1);
     /* GPIO21 is the active-high charge STAT input; no charger is attached. */
     qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 21), 0);
-
     DeviceState *i2c0 = DEVICE(object_resolve_path_component(OBJECT(ss), "i2c0"));
     I2CBus *i2c = I2C_BUS(qdev_get_child_bus(i2c0, "i2c"));
     x4pro_add_i2c(i2c, "bm8563", 0x51);
     x4pro_add_i2c(i2c, "cw2017", 0x63);
-    x4pro_add_i2c(i2c, "qmi8658", 0x6b);
 }
 
 static char *x4pro_get_panel(Object *obj, Error **errp)
@@ -1314,6 +1314,25 @@ static void x4pro_set_panel(Object *obj, const char *value, Error **errp)
         error_setg(errp, "X4 Pro panel must be uc8179 or uc8279-68");
         return;
     }
+    s->uc8279_68 = !strcmp(value, "uc8279-68");
+}
+
+static char *x4classic_get_panel(Object *obj, Error **errp)
+{
+    Esp32s3MachineState *s = ESP32S3_MACHINE(obj);
+    return g_strdup(s->ssd1677 ? "ssd1677" :
+                     s->uc8279_68 ? "uc8279-68" : "uc8179");
+}
+
+static void x4classic_set_panel(Object *obj, const char *value, Error **errp)
+{
+    Esp32s3MachineState *s = ESP32S3_MACHINE(obj);
+    if (strcmp(value, "ssd1677") && strcmp(value, "uc8179") &&
+        strcmp(value, "uc8279-68")) {
+        error_setg(errp, "X4 Classic panel must be ssd1677, uc8179 or uc8279-68");
+        return;
+    }
+    s->ssd1677 = !strcmp(value, "ssd1677");
     s->uc8279_68 = !strcmp(value, "uc8279-68");
 }
 
@@ -1349,8 +1368,8 @@ static void x4classic_machine_class_init(ObjectClass *oc, const void *data)
     mc->desc = "Xteink X4 Classic (ESP32-S3R8, buttons-only e-paper)";
     mc->default_ram_size = 8 * MiB;
     compat_props_add(mc->compat_props, globals, ARRAY_SIZE(globals));
-    object_class_property_add_str(oc, "panel", x4pro_get_panel, x4pro_set_panel);
-    object_class_property_set_description(oc, "panel", "Panel: uc8279-68 (default) or uc8179");
+    object_class_property_add_str(oc, "panel", x4classic_get_panel, x4classic_set_panel);
+    object_class_property_set_description(oc, "panel", "Panel: uc8279-68 (default), uc8179 or ssd1677");
 }
 
 static void x4pro_machine_instance_init(Object *obj)

@@ -208,8 +208,8 @@ pub struct RunArgs {
     /// Board: x3, x4, x4pro or picco. Default: filename hint, else the chip's default (ESP32-C3 = x3, ESP32-S3 = x4pro).
     #[arg(long, value_parser = ["x3", "x4", "x4pro", "x4classic", "picco"])]
     pub machine: Option<String>,
-    /// X4 Pro display panel: uc8279-68 or uc8179.
-    #[arg(long, default_value = "uc8279-68", value_parser = ["uc8279-68", "uc8179"])]
+    /// Display panel: uc8279-68, uc8179, or (X4 Classic only) ssd1677.
+    #[arg(long, default_value = "uc8279-68", value_parser = ["uc8279-68", "uc8179", "ssd1677"])]
     pub panel: String,
     /// Partition table for an app .bin or a build directory: the firmware's partitions.csv or its binary table.
     /// Default for an app: Arduino-ESP32's 16 MB table (the Picco's stock layout on --machine picco).

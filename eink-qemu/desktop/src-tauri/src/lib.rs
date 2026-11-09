@@ -488,7 +488,7 @@ async fn start(window: tauri::WebviewWindow, app: State<'_, App>, request: Reque
         return Err(AppError::new("EINVAL", format!("Unknown device: {}.", options.machine)));
     }
     if !settings::PANELS.contains(&options.panel.as_str()) {
-        return Err(AppError::new("EINVAL", format!("Unknown X4 Pro panel: {}.", options.panel)));
+        return Err(AppError::new("EINVAL", format!("Unknown e-paper panel: {}.", options.panel)));
     }
     let flash = flash.clone();
     let _bridge_gate = app.bridge.gate.lock().await;

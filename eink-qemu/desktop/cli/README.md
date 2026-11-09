@@ -678,7 +678,7 @@ than calling it dead.
 | `--sd IMG` | Start from this card; the run uses a copy unless `--sd-in-place` |
 | `--put HOST[=/DIR]` | Copy a file or folder onto the card before boot (repeatable) |
 | `--machine x3\|x4\|x4pro\|picco` | The board, when the chip does not decide it |
-| `--panel uc8279-68\|uc8179` | X4 Pro display panel (default `uc8279-68`) |
+| `--panel uc8279-68\|uc8179\|ssd1677` | Display panel; SSD1677 is X4 Classic only (default `uc8279-68`) |
 | `--partitions CSV\|BIN` | The firmware's partition table, for an app `.bin` or a build directory |
 | `--power-hold MS` | Hold Power this long at a cold boot (default 1500; stock Xteink firmware: 3000) |
 | `--console usb\|uart0` | Where the firmware log comes from (USB Serial/JTAG by default) |

@@ -18,10 +18,10 @@ async function boot(machine, panel, turbo = false, wifi = false) {
 }
 
 test('panel selection reaches QEMU without changing CPU or input machine', async () => {
-    for (const machine of ['x3', 'x4', 'x4pro', 'picco']) {
-        for (const panel of [undefined, 'uc8179', 'uc8279-68']) {
+    for (const machine of ['x3', 'x4', 'x4pro', 'x4classic', 'picco']) {
+        for (const panel of [undefined, 'uc8179', 'uc8279-68', ...(machine === 'x4classic' ? ['ssd1677'] : [])]) {
             const {args, scripts} = await boot(machine, panel);
-            const expected = machine === 'x4pro' ? `x4pro,panel=${panel || 'uc8279-68'}` : machine;
+            const expected = machine === 'x4pro' || machine === 'x4classic' ? `${machine},panel=${panel || 'uc8279-68'}` : machine;
             assert.equal(args[args.indexOf('-machine') + 1], expected);
             assert.ok(args.includes(`shift=${machine === 'picco' ? 2 : 0},sleep=on`));
             assert.equal(scripts[0], `qemu-system-${['x3', 'x4'].includes(machine) ? 'riscv32' : 'xtensa'}.js`);
@@ -75,7 +75,7 @@ test('new pixels on the canvas tell the page; repaints and blank frames do not',
 });
 
 test('turbo SPI card timings go only to the boards with an SPI card', async () => {
-    for (const machine of ['x3', 'x4', 'x4pro', 'picco']) {
+    for (const machine of ['x3', 'x4', 'x4pro', 'x4classic', 'picco']) {
         const {args} = await boot(machine, undefined, true);
         assert.equal(args.includes('ssi-sd.read-access-us=0'), machine === 'x3' || machine === 'x4', machine);
     }
@@ -85,4 +85,11 @@ test('Wi-Fi off keeps the radio with no access points', async () => {
     const {args} = await boot('x3', undefined, false, false);
     assert.equal(args[args.indexOf('-nic') + 1], 'hubport,hubid=0,model=esp32_wifi');
     assert.ok(args.includes('esp32_wifi.access-points=off'));
+});
+
+test('X4 Classic SSD1677 selection does not receive UC8179 ghosting globals', async () => {
+    const {args} = await boot('x4classic', 'ssd1677', true);
+    assert.equal(args[args.indexOf('-machine') + 1], 'x4classic,panel=ssd1677');
+    assert.ok(!args.some(arg => arg.startsWith('uc8179.ghosting=')));
+    assert.ok(!args.some(arg => arg.startsWith('ssd1677.ghosting=')));
 });

@@ -53,7 +53,7 @@ the package). Unsupported chips, invalid headers and apps exceeding the selected
 are rejected. Full 16 MiB images pass through unchanged.
 The hosted copy is https://evoll.github.io/eink-qemu/ (no firmware included).
 X4 Pro defaults to UC8279 revision 0x68. Use ?turbo=0 for measured timing.
-Select UC8179 under Display panel in the firmware card, or use ?panel=uc8179, for the older panel.
+Select the display controller under Display panel in the firmware card. X4 Classic also offers SSD1677; for example, use ?device=x4classic&panel=ssd1677.
 Saved panel choices take precedence; this selection does not affect other boards.
 Auto detects the chip, not the panel revision.
 UC8279-0x68 has measured panel waits but has not had its optical ghosting fitted.

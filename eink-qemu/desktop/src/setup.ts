@@ -25,7 +25,7 @@ const names: Record<Machine, string> = { x3: 'X3', x4: 'X4', x4pro: 'X4 Pro', x4
 const otherChip: Record<string, string> = {
   'ESP32-C3': 'X3 and X4 take ESP32-C3 firmware', 'ESP32-S3': 'X4 Pro, X4 Classic and Picco take ESP32-S3 firmware',
 };
-const panels: Record<Settings['panel'], string> = { 'uc8279-68': 'UC8279 (0x68, default)', uc8179: 'UC8179' };
+const panels: Record<Settings['panel'], string> = { 'uc8279-68': 'UC8279 (0x68, default)', uc8179: 'UC8179', ssd1677: 'SSD1677' };
 const options: RunOption[] = ['wifi', 'ghosting', 'turbo'];
 export const hasGhosting = (device: Machine | null) => device === 'x3' || device === 'x4pro' || device === 'x4classic';
 
@@ -136,6 +136,7 @@ export function paintSetup(next: Setup | null, nextIdle: boolean) {
   if (next) {
     $('setup-panel-value').textContent = panels[next.settings.panel];
     for (const b of panel.querySelectorAll<HTMLButtonElement>('[data-panel]')) {
+      b.hidden = b.dataset.panel === 'ssd1677' && device !== 'x4classic';
       b.setAttribute('aria-checked', String(b.dataset.panel === next.settings.panel));
       b.disabled = !idle;
     }

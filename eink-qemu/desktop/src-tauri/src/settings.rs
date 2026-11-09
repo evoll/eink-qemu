@@ -73,7 +73,7 @@ pub struct SettingsPatch {
 }
 
 pub const DEVICES: [&str; 6] = ["auto", "x3", "x4", "x4pro", "x4classic", "picco"];
-pub const PANELS: [&str; 2] = ["uc8279-68", "uc8179"];
+pub const PANELS: [&str; 3] = ["uc8279-68", "uc8179", "ssd1677"];
 
 impl Settings {
     fn decode(bytes: &[u8], problems: &mut Vec<String>) -> Result<Self, serde_json::Error> {
@@ -112,7 +112,7 @@ impl Settings {
             settings.device = "auto".into();
         }
         if !PANELS.contains(&settings.panel.as_str()) {
-            problems.push(format!("Unknown X4 Pro panel \"{}\" in the settings; using UC8279 (0x68).", settings.panel));
+            problems.push(format!("Unknown e-paper panel \"{}\" in the settings; using UC8279 (0x68).", settings.panel));
             settings.panel = "uc8279-68".into();
         }
         if settings.wifi_mode.parse::<WifiMode>().is_err() {
@@ -152,7 +152,7 @@ impl Settings {
         }
         if let Some(panel) = patch.panel {
             if !PANELS.contains(&panel.as_str()) {
-                return Err(format!("Unknown X4 Pro panel: {panel}."));
+                return Err(format!("Unknown e-paper panel: {panel}."));
             }
             next.panel = panel;
         }

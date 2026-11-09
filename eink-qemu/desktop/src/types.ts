@@ -15,7 +15,7 @@ export interface SessionInfo {
 export interface Settings {
   bridge?: import('./bridge-types').BridgeSelection | null;
   device: 'auto' | Machine;
-  panel: 'uc8279-68' | 'uc8179';
+  panel: 'uc8279-68' | 'uc8179' | 'ssd1677';
   wifi: boolean;
   wifiMode: 'nat' | 'bridge';
   ghosting: boolean;

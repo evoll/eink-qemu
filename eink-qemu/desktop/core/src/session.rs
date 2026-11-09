@@ -791,10 +791,13 @@ impl Session {
         }
         if machine != "x4" && machine != "picco" {
             // uc8279-68, the default X4 Pro panel, is a UC8179 subtype.
-            let panel = if machine == "x3" { "uc8279" } else { "uc8179" };
-            args.extend(["-global".into(), format!("{panel}.ghosting={}", if options.ghosting { "on" } else { "off" })]);
-            if let Some(animate) = options.animate {
-                args.extend(["-global".into(), format!("{panel}.animate={}", if animate { "on" } else { "off" })]);
+            // SSD1677 has its own update model and no ghosting/animation properties.
+            let panel = if machine == "x3" { "uc8279" } else if options.panel == "ssd1677" { "ssd1677" } else { "uc8179" };
+            if panel != "ssd1677" {
+                args.extend(["-global".into(), format!("{panel}.ghosting={}", if options.ghosting { "on" } else { "off" })]);
+                if let Some(animate) = options.animate {
+                    args.extend(["-global".into(), format!("{panel}.animate={}", if animate { "on" } else { "off" })]);
+                }
             }
         }
         if let Some(ms) = options.power_hold_ms {
