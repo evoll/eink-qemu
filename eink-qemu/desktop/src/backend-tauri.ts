@@ -81,7 +81,7 @@ class CanvasScreen implements Screen {
     const bytes = new Uint8Array(buffer);
     const count = view.getUint32(4, true);
     const stride = this.width, data = this.image.data;
-    let at = 8, minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    let at = 8;
     for (let n = 0; n < count; n++) {
       const x = view.getUint32(at, true), y = view.getUint32(at + 4, true);
       const w = view.getUint32(at + 8, true), h = view.getUint32(at + 12, true);
@@ -95,9 +95,13 @@ class CanvasScreen implements Screen {
         }
       }
       at += w * h;
-      minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
     }
-    if (count) this.context.putImageData(this.image, 0, 0, minX, minY, maxX - minX, maxY - minY);
+    // Flush the complete panel image instead of passing a dirty rectangle.
+    // The browser WASM renderer presents complete ImageData frames; using the
+    // dirty-rectangle overload here can produce a horizontally clipped frame
+    // in the native WebView on some platforms. The panel is small (480x800),
+    // so uploading the full buffer keeps Desktop and Web rendering identical.
+    if (count) this.context.putImageData(this.image, 0, 0);
   }
 }
 
