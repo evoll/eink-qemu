@@ -81,10 +81,13 @@ class CanvasScreen implements Screen {
     const bytes = new Uint8Array(buffer);
     const count = view.getUint32(4, true);
     const stride = this.width, data = this.image.data;
-    let at = 8, minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    let at = 8;
+    let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
     for (let n = 0; n < count; n++) {
       const x = view.getUint32(at, true), y = view.getUint32(at + 4, true);
       const w = view.getUint32(at + 8, true), h = view.getUint32(at + 12, true);
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
       at += 16;
       for (let row = 0; row < h; row++) {
         let target = ((y + row) * stride + x) * 4;
@@ -95,9 +98,9 @@ class CanvasScreen implements Screen {
         }
       }
       at += w * h;
-      minX = Math.min(minX, x); minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
     }
+    // Preserve the original dirty-rectangle update path. The full-frame
+    // workaround was unrelated to the X4 Classic panel offset.
     if (count) this.context.putImageData(this.image, 0, 0, minX, minY, maxX - minX, maxY - minY);
   }
 }
