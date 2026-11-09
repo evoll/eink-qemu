@@ -91,6 +91,8 @@ export interface Backend {
   stop(): Promise<void>;
   reset(): Promise<void>;
   key(name: string, down: boolean): Promise<void>;
+  /** Inject a short lateral IMU impulse on boards with a QMI8658. */
+  shake?(direction: 'left' | 'right'): Promise<void>;
   touch(x: number, y: number, down: boolean): Promise<void>;
   saveScreenshot(png: Uint8Array, name: string): Promise<string | null>;
 

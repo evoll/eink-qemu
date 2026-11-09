@@ -14,6 +14,7 @@
  */
 #include "qemu/osdep.h"
 #include "qemu/module.h"
+#include "qapi/error.h"
 #include "hw/i2c/i2c.h"
 
 #define TYPE_QMI8658 "qmi8658"
@@ -34,6 +35,7 @@ struct QMI8658State {
     uint8_t regs[QMI8658_NREGS];
     uint8_t ptr;
     bool ptr_next;
+    char *shake;
 };
 
 static void qmi8658_latch(QMI8658State *s)
@@ -44,8 +46,21 @@ static void qmi8658_latch(QMI8658State *s)
     s->regs[R_TEMP_L] = 0;
     s->regs[R_TEMP_L + 1] = 25;
     memset(&s->regs[R_AX_L], 0, R_GZ_H - R_AX_L + 1);
-    s->regs[R_AX_L + 4] = 0x00;     /* AZ = 16384 = +1 g */
-    s->regs[R_AX_L + 5] = 0x40;
+    /* QMI8658 raw output at the default +/-2 g / +/-256 dps ranges.
+     * The normal pose is flat (+1 g on Z). A host-side shake injects a
+     * short lateral acceleration and angular impulse, then returns to rest.
+     */
+    if (s->shake && !strcmp(s->shake, "left")) {
+        s->regs[R_AX_L] = 0x00; s->regs[R_AX_L + 1] = 0xE0; /* -8192 X */
+        s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x40;
+        s->regs[R_GZ_H - 1] = 0x00; s->regs[R_GZ_H] = 0x20; /* +8192 Z gyro */
+    } else if (s->shake && !strcmp(s->shake, "right")) {
+        s->regs[R_AX_L] = 0x00; s->regs[R_AX_L + 1] = 0x20; /* +8192 X */
+        s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x40;
+        s->regs[R_GZ_H - 1] = 0x00; s->regs[R_GZ_H] = 0xE0; /* -8192 Z gyro */
+    } else {
+        s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x40; /* +1 g Z */
+    }
 }
 
 static int qmi8658_event(I2CSlave *i2c, enum i2c_event event)
@@ -95,6 +110,30 @@ static void qmi8658_reset_hold(Object *obj, ResetType type)
     qmi8658_latch(s);
 }
 
+static char *qmi8658_get_shake(Object *obj, Error **errp)
+{
+    QMI8658State *s = QMI8658(obj);
+    return g_strdup(s->shake ? s->shake : "none");
+}
+
+static void qmi8658_set_shake(Object *obj, const char *value, Error **errp)
+{
+    QMI8658State *s = QMI8658(obj);
+    if (strcmp(value, "none") && strcmp(value, "left") && strcmp(value, "right")) {
+        error_setg(errp, "shake must be none, left or right");
+        return;
+    }
+    g_free(s->shake);
+    s->shake = g_strdup(value);
+    qmi8658_latch(s);
+}
+
+static void qmi8658_finalize(Object *obj)
+{
+    QMI8658State *s = QMI8658(obj);
+    g_free(s->shake);
+}
+
 static void qmi8658_class_init(ObjectClass *klass, const void *data)
 {
     I2CSlaveClass *k = I2C_SLAVE_CLASS(klass);
@@ -104,6 +143,8 @@ static void qmi8658_class_init(ObjectClass *klass, const void *data)
     k->recv = qmi8658_recv;
     k->send = qmi8658_send;
     rc->phases.hold = qmi8658_reset_hold;
+    object_class_property_add_str(klass, "shake", qmi8658_get_shake, qmi8658_set_shake);
+    OBJECT_CLASS(klass)->finalize = qmi8658_finalize;
 }
 
 static const TypeInfo qmi8658_info = {

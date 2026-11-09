@@ -201,6 +201,12 @@ window.addEventListener('message', async ({source, origin, data}) => {
             key: data.code === 'KeyP' ? 'p' : data.code, code: data.code,
             keyCode: keyCodes[data.code], which: keyCodes[data.code], bubbles: true
         }));
+    } else if (data.type === 'shake') {
+        if (machineType === 'x4classic') {
+            const direction = data.direction === 'left' ? 'left' : 'right';
+            command(`qom-set /machine/qmi8658 shake ${direction}`);
+            setTimeout(() => command('qom-set /machine/qmi8658 shake none'), 180);
+        }
     } else if (data.type === 'reset') {
         newBoot();
         homeKey(false);

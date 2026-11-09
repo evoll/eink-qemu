@@ -729,6 +729,9 @@ export const browser: Backend = {
     const code = { Back: 'Backspace', Confirm: 'Enter', Left: 'ArrowLeft', Right: 'ArrowRight', Up: 'ArrowUp', Down: 'ArrowDown', Power: 'KeyP', Home: 'Home' }[name];
     if (code && session.state === 'running') post({ type: 'key', code, down });
   },
+  async shake(direction) {
+    if (session.state === 'running') post({ type: 'shake', direction });
+  },
   async touch() {},   // SDL in the runtime iframe takes the pointer itself.
   async saveScreenshot(png, name) {
     saveBlob(png, name);
