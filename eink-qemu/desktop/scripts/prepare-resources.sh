@@ -12,7 +12,7 @@ cp "$root/eink-qemu/boot/LICENSE" "$boot/bootloader.LICENSE.txt"
 cp "$root/eink-qemu/boot/LICENSE.partitions" "$boot/partitions.LICENSE.txt"
 # CrossPoint's NVS entry, from its profile, sized for the bundled table's NVS
 # partition; firmware.ts writes it only into apps that carry its strings.
-rm -f "$boot/nvs-x3.bin"
+rm -f "$boot/nvs-x3.bin" "$boot/nvs-x4classic-uc8179.bin" "$boot/nvs-x4classic-uc8279-68.bin" "$boot/nvs-x4classic-ssd1677.bin"
 python3 - "$root" "$boot" <<'PY'
 from pathlib import Path
 from importlib import import_module
@@ -31,4 +31,13 @@ nvs_size = next(size for magic, kind, subtype, _, size in
                 if magic == 0x50aa and (kind, subtype) == (1, 2))
 seed = json.loads((root / 'eink-qemu/profiles/crosspoint.json').read_text())['nvs_seed']
 (boot / 'nvs-crosspoint.bin').write_bytes(mknvs.image(nvs_size, seed['namespace'], seed['u8']))
+# X4 Classic factory panel selector: the current FreeInk/CrossPoint detector
+# treats an existing hw_calib/screenType as authoritative and skips the bus probe.
+classic_table = mkflash.partition_table(mkflash.BOOT_DIR / 'partitions-x4classic.csv')
+classic_nvs_size = next(size for magic, kind, subtype, _, size in
+                        (struct.unpack_from('<HBBII', classic_table, at) for at in range(0, len(classic_table), 32))
+                        if magic == 0x50aa and (kind, subtype) == (1, 2))
+for panel, screen_type in [('uc8179', 1), ('uc8279-68', 2), ('ssd1677', 3)]:
+    (boot / f'nvs-x4classic-{panel}.bin').write_bytes(
+        mknvs.image(classic_nvs_size, 'hw_calib', {'screenType': screen_type}))
 PY

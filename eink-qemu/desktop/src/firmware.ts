@@ -28,7 +28,7 @@ async function bootAsset(name: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-export async function prepareFlash(input: Uint8Array, device: string, progress: (text: string) => void): Promise<Flash> {
+export async function prepareFlash(input: Uint8Array, device: string, panel: Settings['panel'], progress: (text: string) => void): Promise<Flash> {
   let bytes = input;
   const xota = XOTA.isXota(bytes);
   if (xota) {
@@ -56,12 +56,16 @@ export async function prepareFlash(input: Uint8Array, device: string, progress: 
   const machine = FlashImage.selectMachine(chip, device);
   const layout = FlashImage.appLayout(machine);
   progress('Composing 16 MiB flash image…');
-  const seed = crosspoint.nvs_seed.machines.includes(machine) && FlashImage.hasCStrings(bytes, crosspoint.detect.image_strings);
+  const crosspointApp = FlashImage.hasCStrings(bytes, crosspoint.detect.image_strings);
+  const x3Seed = crosspoint.nvs_seed.machines.includes(machine) && crosspointApp;
+  const x4ClassicSeed = machine === 'x4classic' && crosspointApp;
+  const seedAsset = x3Seed ? 'nvs-crosspoint.bin'
+    : x4ClassicSeed ? `nvs-x4classic-${panel}.bin` : null;
   const [boot, partitions, nvs] = await Promise.all([
-    bootAsset(layout.bootAsset), bootAsset(layout.partitionAsset), seed ? bootAsset('nvs-crosspoint.bin') : null,
+    bootAsset(layout.bootAsset), bootAsset(layout.partitionAsset), seedAsset ? bootAsset(seedAsset) : null,
   ]);
   const composition = `Composed 16 MiB flash from the ${xota ? 'XOTA update' : 'app'} with ${layout.partitionTable}` +
-    (seed ? ` and ${crosspoint.title}'s NVS entry` : '');
+    (seedAsset ? ` and ${x4ClassicSeed ? `X4 Classic ${panel} screenType` : `${crosspoint.title}'s NVS entry`}` : '');
   return { flash: FlashImage.composeApp(bytes, { machine, boot, partitions, nvs, selectOta: xota }), machine, composed: true, composition };
 }
 

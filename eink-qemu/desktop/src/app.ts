@@ -153,7 +153,7 @@ async function start() {
     status('Loading firmware…');
     const input = await api.readFirmware();
     const device = selectedDevice(settings.device, setup?.firmware ?? null) ?? 'auto';
-    const { flash, machine, composed, composition: composedFrom } = await prepareFlash(input, device, status);
+    const { flash, machine, composed, composition: composedFrom } = await prepareFlash(input, device, settings.panel, status);
     const composition = composedFrom ? `${composedFrom} · ` : '';
     if (composed) {
       appendLines([composition.replace(/ · $/, '')]);

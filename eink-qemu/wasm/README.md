@@ -72,7 +72,7 @@ ink artifacts and idle drift; capture after refresh completion.
 The X4 Pro defaults to UC8279 revision `0x68` in native, Node, desktop and
 browser launchers. For the legacy panel, use
 `X4PANEL=uc8179 eink-qemu/wasm/run-node.sh flash.bin sd.img`, or choose
-**Display panel** is selectable for X4 Pro and X4 Classic. X4 Classic additionally supports SSD1677 (`?device=x4classic&panel=ssd1677`).
+**Display panel** is selectable for X4 Pro and X4 Classic. X4 Classic additionally supports SSD1677 (`?device=x4classic&panel=ssd1677`). For CrossPoint X4 Classic app images, the selected panel also seeds `hw_calib/screenType` in the composed NVS partition (`1` UC8179, `2` UC8279, `3` SSD1677), matching the current FreeInk detector. Existing merged images and full flash dumps are passed through unchanged and are not rewritten.
 Saved browser choices and explicit overrides take precedence. Panel selection
 is separate from chip detection; Auto cannot determine a panel revision from
 a flash image. See the [calibration report](../x4cal/README.md) before
