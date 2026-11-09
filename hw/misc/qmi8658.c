@@ -4,9 +4,9 @@
  * WHO_AM_I (0x00) = 0x05, REVISION (0x01) = 0x7C, CTRL1-CTRL9 (0x02-0x0A)
  * stored, STATUS0 (0x2E) reports accel and gyro data available while CTRL7
  * enables them, TEMP (0x33-0x34) 25 C, accel AX..AZ (0x35-0x3A) reads the
- * device lying flat (Z = +1 g at the +-2 g scale) and gyro GX..GZ
- * (0x3B-0x40) reads at rest. The register pointer auto-increments. No FIFO,
- * motion engine or interrupts.
+ * device lying flat (Z = +1 g) and gyro GX..GZ (0x3B-0x40) reads at rest.
+ * Host-side shake injection supplies a sustained sample window for firmware
+ * polling. The register pointer auto-increments. No FIFO or motion engine.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 or
@@ -46,18 +46,20 @@ static void qmi8658_latch(QMI8658State *s)
     s->regs[R_TEMP_L] = 0;
     s->regs[R_TEMP_L + 1] = 25;
     memset(&s->regs[R_AX_L], 0, R_GZ_H - R_AX_L + 1);
-    /* QMI8658 raw output at the default +/-2 g / +/-256 dps ranges.
-     * The normal pose is flat (+1 g on Z). A host-side shake injects a
-     * short lateral acceleration and angular impulse, then returns to rest.
+    /* Raw output uses the active CTRL2/CTRL3 range. The normal pose is flat
+     * (+1 g on Z); host-side shake injects a sustained lateral sample window
+     * and angular impulse so firmware polling can observe the event.
      */
     if (s->shake && !strcmp(s->shake, "left")) {
-        s->regs[R_AX_L] = 0x00; s->regs[R_AX_L + 1] = 0xE0; /* -8192 X */
-        s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x40;
-        s->regs[R_GZ_H - 1] = 0x00; s->regs[R_GZ_H] = 0x20; /* +8192 Z gyro */
+        /* A visible lateral impulse (~1.5 g at the X4C driver's +/-8 g
+         * range) plus a signed yaw impulse. */
+        s->regs[R_AX_L] = 0x00; s->regs[R_AX_L + 1] = 0xE8; /* -6144 X */
+        s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x10; /* +1 g Z */
+        s->regs[R_GZ_H - 1] = 0x00; s->regs[R_GZ_H] = 0x40; /* +16384 Z gyro */
     } else if (s->shake && !strcmp(s->shake, "right")) {
-        s->regs[R_AX_L] = 0x00; s->regs[R_AX_L + 1] = 0x20; /* +8192 X */
-        s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x40;
-        s->regs[R_GZ_H - 1] = 0x00; s->regs[R_GZ_H] = 0xE0; /* -8192 Z gyro */
+        s->regs[R_AX_L] = 0x00; s->regs[R_AX_L + 1] = 0x18; /* +6144 X */
+        s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x10; /* +1 g Z */
+        s->regs[R_GZ_H - 1] = 0x00; s->regs[R_GZ_H] = 0xC0; /* -16384 Z gyro */
     } else {
         s->regs[R_AX_L + 4] = 0x00; s->regs[R_AX_L + 5] = 0x40; /* +1 g Z */
     }

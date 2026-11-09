@@ -85,13 +85,13 @@ static void shake_injection(void)
     s->shake = "left";
     qmi8658_latch(s);
     assert(read_reg(s, 0x35) == 0x00);
-    assert(read_reg(s, 0x36) == 0xe0); /* negative X acceleration */
+    assert(read_reg(s, 0x36) == 0xe8); /* negative X acceleration */
     assert(read_reg(s, 0x3f) == 0x00);
-    assert(read_reg(s, 0x40) == 0x20); /* positive Z angular impulse */
+    assert(read_reg(s, 0x40) == 0x40); /* positive Z angular impulse */
     s->shake = "right";
     qmi8658_latch(s);
-    assert(read_reg(s, 0x36) == 0x20); /* positive X acceleration */
-    assert(read_reg(s, 0x40) == 0xe0); /* negative Z angular impulse */
+    assert(read_reg(s, 0x36) == 0x18); /* positive X acceleration */
+    assert(read_reg(s, 0x40) == 0xc0); /* negative Z angular impulse */
     s->shake = "none";
     qmi8658_latch(s);
     assert(read_reg(s, 0x36) == 0x00);

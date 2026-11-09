@@ -48,7 +48,6 @@ struct Ssd1677State {
     uint32_t busy_ms;
     bool portrait;      /* turn 90 degrees clockwise, as the X4 is held */
     bool refreshing;    /* BUSY belongs to a master activation */
-    bool busy_level;    /* BUSY output is active high on SSD1677 */
     int64_t refresh_start_ns;
     uint64_t refreshes; /* completed activations, and their BUSY time, since start */
     uint64_t refresh_ns;
@@ -81,7 +80,6 @@ struct Ssd1677State {
 static void ssd1677_set_busy(Ssd1677State *s, uint32_t ms)
 {
     s->refreshing = false;
-    s->busy_level = true;
     qemu_set_irq(s->busy, 1);
     timer_mod(&s->busy_timer, qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + ms);
 }
@@ -94,31 +92,35 @@ static void ssd1677_busy_done(void *opaque)
         s->refreshes++;
         s->refresh_ns += qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) - s->refresh_start_ns;
     }
-    s->busy_level = false;
     qemu_set_irq(s->busy, 0);
 }
 
 static void ssd1677_ram_write(Ssd1677State *s, int plane, uint8_t v)
 {
-    /* X is pixel-addressed: D7 lands at the counter, also when decrementing. */
+    /* SSD1677 exposes X counters in pixel coordinates, but each 0x24/0x26
+     * data byte covers eight adjacent pixels. Keep the counter in pixels and
+     * convert to the byte index only when storing the RAM byte. */
     if (!(s->entry & 1)) {
         v = revbit8(v);
     }
     if (s->xc < W && s->yc < H) {
         s->ram[plane][s->yc][s->xc / 8] = v;
     }
-    /* X counts in pixels, 8 per byte; Y-first mode (bit 2) isn't used by the driver. */
+
+    /* ID1/ID0 select X/Y direction. AM (bit 2) selects address order; the
+     * Xteink driver uses horizontal addressing (AM=0). */
     bool xinc = s->entry & 1, yinc = s->entry & 2;
-    bool x_at_end = xinc ? s->xc / 8 >= s->xe / 8 : s->xc / 8 <= s->xe / 8;
+    bool x_at_end = xinc ? s->xc / 8 >= s->xe / 8 :
+                           s->xc / 8 <= s->xe / 8;
     if (!x_at_end) {
-        s->xc = xinc ? s->xc + 8 : s->xc - 8;
+        s->xc = xinc ? s->xc + 8 : (s->xc >= 8 ? s->xc - 8 : 0);
         return;
     }
     s->xc = s->xs;
     if (s->yc == s->ye) {
         s->yc = s->ys;
     } else {
-        s->yc = yinc ? s->yc + 1 : s->yc - 1;
+        s->yc = yinc ? s->yc + 1 : (s->yc ? s->yc - 1 : 0);
     }
 }
 
@@ -285,9 +287,28 @@ static void ssd1677_command_done(Ssd1677State *s)
     case 0x46:
     case 0x47:
         if (s->nargs >= 1) {
-            /* Auto write: bit 7 = fill value, the rest picks a pattern; plain fill is enough. */
-            memset(s->ram[s->cmd == 0x46 ? PLANE_BW : PLANE_RED], (a[0] & 0x80) ? 0xff : 0x00,
-                   sizeof(s->ram[0]));
+            /* Auto write follows the configured RAM window and data-entry
+             * direction, just like a stream of RAM data bytes. Preserve the
+             * host-programmed counters: these commands perform the fill
+             * internally and do not consume the subsequent RAM-write cursor. */
+            uint16_t saved_x = s->xc, saved_y = s->yc;
+            uint8_t fill = (a[0] & 0x80) ? 0xff : 0x00;
+            int plane = s->cmd == 0x46 ? PLANE_BW : PLANE_RED;
+            for (unsigned i = 0; i < W * H / 8; i++) {
+                uint16_t x = s->xc, y = s->yc;
+                bool in_x = (s->entry & 1) ?
+                    (x >= s->xs && x <= s->xe) :
+                    (x <= s->xs && x >= s->xe);
+                bool in_y = (s->entry & 2) ?
+                    (y >= s->ys && y <= s->ye) :
+                    (y <= s->ys && y >= s->ye);
+                if (!in_x || !in_y || x >= W || y >= H) {
+                    break;
+                }
+                ssd1677_ram_write(s, plane, fill);
+            }
+            s->xc = saved_x;
+            s->yc = saved_y;
             ssd1677_set_busy(s, 5);
         }
         break;
@@ -335,22 +356,12 @@ static void ssd1677_command_start(Ssd1677State *s, uint8_t c)
 
 static bool ssd1677_reading(Ssd1677State *s)
 {
-    /* 0x2F is the SSD1677 status-bit read command. 0x2E is retained
-     * as the legacy Picco module-ID extension used by the existing model. */
-    return s->dc && !s->in_reset && !s->asleep &&
-           (s->cmd == 0x2e || s->cmd == 0x2f);
+    return s->dc && !s->in_reset && !s->asleep && s->cmd == 0x2e;
 }
 
 static uint8_t ssd1677_read_byte(Ssd1677State *s)
 {
-    /* SSD1677 status register: bit 5 HV-ready, bit 4 VCI-low,
-     * bit 2 BUSY, bits 1:0 Chip ID (POR value 01). The model does not
-     * emulate VCI/HV fault injection, so those flags remain clear. */
-    if (s->cmd == 0x2f) {
-        return 0x01 | (s->busy_level ? 0x04 : 0x00);
-    }
-
-    /* Legacy DEPG0397 module-ID extension used by the Picco stock driver. */
+    /* DEPG0397 controller identity, accepted by the Picco stock driver. */
     static const uint8_t id[] = {
         0xca, 0xfe, 0x00, 0x16, 0x77, 0x00, 0x08, 0x01, 0x00, 0x4e,
     };
@@ -476,7 +487,6 @@ static void ssd1677_set_rst(void *opaque, int n, int level)
         s->in_reset = true;
         timer_del(&s->busy_timer);
         s->refreshing = false;  /* cut short: not a completed refresh */
-        s->busy_level = false;
         qemu_set_irq(s->busy, 0);
         s->bits = 0;
         s->read_pos = 0;

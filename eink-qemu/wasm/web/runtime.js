@@ -5,7 +5,7 @@
 const monitorInput = [];
 let monitorOutput = '';
 const monitorDecoder = new TextDecoder();
-let machineType, homeHeld = false;
+let machineType, homeHeld = false, shakeTimer = 0;
 // Actions that need the VM stopped (snapshots, SD card operations), FIFO.
 // Each one runs on the 'VM status: paused' line of its own 'info status'.
 const pauses = [];
@@ -36,6 +36,8 @@ function screenChanged(blank) {
     }
 }
 function newBoot() {
+    clearTimeout(shakeTimer);
+    shakeTimer = 0;
     screenPrint = 0;
     clearTimeout(screenTimer);
     screenTimer = 0;
@@ -204,8 +206,14 @@ window.addEventListener('message', async ({source, origin, data}) => {
     } else if (data.type === 'shake') {
         if (machineType === 'x4classic') {
             const direction = data.direction === 'left' ? 'left' : 'right';
+            // Keep the impulse long enough for the firmware's polling loop to
+            // observe it; the previous 180 ms pulse could fall between samples.
+            clearTimeout(shakeTimer);
             command(`qom-set /machine/qmi8658 shake ${direction}`);
-            setTimeout(() => command('qom-set /machine/qmi8658 shake none'), 180);
+            shakeTimer = setTimeout(() => {
+                command('qom-set /machine/qmi8658 shake none');
+                shakeTimer = 0;
+            }, 1200);
         }
     } else if (data.type === 'reset') {
         newBoot();

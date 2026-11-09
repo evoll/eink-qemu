@@ -147,6 +147,63 @@ static void bitbang_id(void)
     free(s);
 }
 
+static void ram_window_pixel_addressing(void)
+{
+    Ssd1677State *s = calloc(1, sizeof(*s));
+    command(s, 0x12, NULL, 0);
+    /* X window endpoints/counter are pixel coordinates. A byte write covers
+     * eight pixels, so the two-byte window 0..15 wraps after two writes. */
+    command(s, 0x11, (uint8_t[]){0x03}, 1);
+    command(s, 0x44, (uint8_t[]){0, 0, 15, 0}, 4);
+    command(s, 0x45, (uint8_t[]){0, 0, 1, 0}, 4);
+    command(s, 0x4e, (uint8_t[]){0, 0}, 2);
+    command(s, 0x4f, (uint8_t[]){0, 0}, 2);
+    command(s, 0x24, (uint8_t[]){0x12, 0x34}, 2);
+    assert(s->ram[PLANE_BW][0][0] == 0x12);
+    assert(s->ram[PLANE_BW][0][1] == 0x34);
+    assert(s->xc == 0 && s->yc == 1);
+
+    /* Reverse X addressing starts at the high pixel coordinate and walks
+     * backward one byte (eight pixels) at a time. */
+    command(s, 0x11, (uint8_t[]){0x00}, 1);
+    command(s, 0x44, (uint8_t[]){15, 0, 0, 0}, 4);
+    command(s, 0x45, (uint8_t[]){0, 0, 0, 0}, 4);
+    command(s, 0x4e, (uint8_t[]){15, 0}, 2);
+    command(s, 0x4f, (uint8_t[]){0, 0}, 2);
+    command(s, 0x24, (uint8_t[]){0x96, 0x3c}, 2);
+    assert(s->ram[PLANE_BW][0][1] == revbit8(0x96));
+    assert(s->ram[PLANE_BW][0][0] == revbit8(0x3c));
+    assert(s->xc == 15 && s->yc == 0);
+    free(s);
+}
+
+static void auto_fill_respects_ram_window(void)
+{
+    Ssd1677State *s = calloc(1, sizeof(*s));
+    command(s, 0x12, NULL, 0);
+    command(s, 0x11, (uint8_t[]){0x03}, 1);
+    command(s, 0x44, (uint8_t[]){0, 0, 15, 0}, 4);
+    command(s, 0x45, (uint8_t[]){0, 0, 1, 0}, 4);
+    command(s, 0x4e, (uint8_t[]){0, 0}, 2);
+    command(s, 0x4f, (uint8_t[]){0, 0}, 2);
+    command(s, 0x46, (uint8_t[]){0x80}, 1);
+    assert(s->ram[PLANE_BW][0][0] == 0xff);
+    assert(s->ram[PLANE_BW][0][1] == 0xff);
+    assert(s->ram[PLANE_BW][1][0] == 0xff);
+    assert(s->ram[PLANE_BW][1][1] == 0xff);
+    assert(s->ram[PLANE_BW][0][2] == 0x00);
+    assert(s->ram[PLANE_BW][1][2] == 0x00);
+    assert(s->ram[PLANE_BW][2][0] == 0x00);
+    /* Auto-fill leaves the host's address cursor unchanged. */
+    assert(s->xc == 0 && s->yc == 0);
+
+    command(s, 0x47, (uint8_t[]){0x00}, 1);
+    assert(s->ram[PLANE_RED][0][0] == 0x00);
+    assert(s->ram[PLANE_RED][1][1] == 0x00);
+    assert(s->ram[PLANE_RED][0][2] == 0x00);
+    free(s);
+}
+
 static void lut_pixels(void)
 {
     Ssd1677State *s = calloc(1, sizeof(*s));
@@ -210,6 +267,8 @@ int main(int argc, char **argv)
     if (!strcmp(argv[1], "id")) read_id();
     else if (!strcmp(argv[1], "bitbang")) bitbang_id();
     else if (!strcmp(argv[1], "lut")) lut_pixels();
+    else if (!strcmp(argv[1], "window")) ram_window_pixel_addressing();
+    else if (!strcmp(argv[1], "autofill")) auto_fill_respects_ram_window();
     else abort();
     return 0;
 }
@@ -244,3 +303,9 @@ class SSD1677Protocol(unittest.TestCase):
 
     def test_mono_and_gray_luts_render_the_correct_pixel_levels(self):
         self.check_case('lut')
+
+    def test_ram_window_uses_pixel_addressed_x_counter(self):
+        self.check_case('window')
+
+    def test_auto_fill_is_limited_to_ram_window_and_preserves_cursor(self):
+        self.check_case('autofill')
