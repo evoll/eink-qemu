@@ -7,6 +7,7 @@
 import '@web/xota.js';
 import '@web/flash-image.js';
 import crosspoint from '../../profiles/crosspoint.json' with { type: 'json' };
+import type { Settings } from './types';
 
 export interface Flash {
   flash: Uint8Array;
