@@ -144,13 +144,13 @@ static void qmi8658_class_init(ObjectClass *klass, const void *data)
     k->send = qmi8658_send;
     rc->phases.hold = qmi8658_reset_hold;
     object_class_property_add_str(klass, "shake", qmi8658_get_shake, qmi8658_set_shake);
-    OBJECT_CLASS(klass)->finalize = qmi8658_finalize;
 }
 
 static const TypeInfo qmi8658_info = {
     .name = TYPE_QMI8658,
     .parent = TYPE_I2C_SLAVE,
     .instance_size = sizeof(QMI8658State),
+    .instance_finalize = qmi8658_finalize,
     .class_init = qmi8658_class_init,
 };
 
