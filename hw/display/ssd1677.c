@@ -48,6 +48,7 @@ struct Ssd1677State {
     uint32_t busy_ms;
     bool portrait;      /* turn 90 degrees clockwise, as the X4 is held */
     bool refreshing;    /* BUSY belongs to a master activation */
+    bool busy_level;    /* BUSY output is active high on SSD1677 */
     int64_t refresh_start_ns;
     uint64_t refreshes; /* completed activations, and their BUSY time, since start */
     uint64_t refresh_ns;
@@ -80,6 +81,7 @@ struct Ssd1677State {
 static void ssd1677_set_busy(Ssd1677State *s, uint32_t ms)
 {
     s->refreshing = false;
+    s->busy_level = true;
     qemu_set_irq(s->busy, 1);
     timer_mod(&s->busy_timer, qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + ms);
 }
@@ -92,6 +94,7 @@ static void ssd1677_busy_done(void *opaque)
         s->refreshes++;
         s->refresh_ns += qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) - s->refresh_start_ns;
     }
+    s->busy_level = false;
     qemu_set_irq(s->busy, 0);
 }
 
@@ -332,12 +335,22 @@ static void ssd1677_command_start(Ssd1677State *s, uint8_t c)
 
 static bool ssd1677_reading(Ssd1677State *s)
 {
-    return s->dc && !s->in_reset && !s->asleep && s->cmd == 0x2e;
+    /* 0x2F is the SSD1677 status-bit read command. 0x2E is retained
+     * as the legacy Picco module-ID extension used by the existing model. */
+    return s->dc && !s->in_reset && !s->asleep &&
+           (s->cmd == 0x2e || s->cmd == 0x2f);
 }
 
 static uint8_t ssd1677_read_byte(Ssd1677State *s)
 {
-    /* DEPG0397 controller identity, accepted by the Picco stock driver. */
+    /* SSD1677 status register: bit 5 HV-ready, bit 4 VCI-low,
+     * bit 2 BUSY, bits 1:0 Chip ID (POR value 01). The model does not
+     * emulate VCI/HV fault injection, so those flags remain clear. */
+    if (s->cmd == 0x2f) {
+        return 0x01 | (s->busy_level ? 0x04 : 0x00);
+    }
+
+    /* Legacy DEPG0397 module-ID extension used by the Picco stock driver. */
     static const uint8_t id[] = {
         0xca, 0xfe, 0x00, 0x16, 0x77, 0x00, 0x08, 0x01, 0x00, 0x4e,
     };
@@ -463,6 +476,7 @@ static void ssd1677_set_rst(void *opaque, int n, int level)
         s->in_reset = true;
         timer_del(&s->busy_timer);
         s->refreshing = false;  /* cut short: not a completed refresh */
+        s->busy_level = false;
         qemu_set_irq(s->busy, 0);
         s->bits = 0;
         s->read_pos = 0;

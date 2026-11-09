@@ -992,9 +992,13 @@ App-only X4 images use the bundled bootloader and Arduino-ESP32 partition table
 without forcing X3 detection in NVS.
 
 The X4 SSD1677 model supports framebuffer writes, RAM windows and active-high
-BUSY. Refresh timing is simplified and ghosting is not modeled. The console
-uses the device's 480x800 portrait orientation; TRMNL draws its setup interface
-in landscape.
+BUSY. It implements the datasheet Status Bit Read command `0x2F`: bit 2 reflects
+BUSY, bits 1:0 return the power-on Chip ID `01`, and the VCI/HV fault flags stay
+clear unless fault injection is added. The separate `0x2E` read remains as a
+legacy DEPG0397 module-ID extension for the BOOX Picco driver; it is not the
+SSD1677 status command. Refresh timing is simplified and ghosting is not
+modeled. The console uses the device's 480x800 portrait orientation; TRMNL
+draws its setup interface in landscape.
 
 ## BOOX Picco (`-machine picco`, ESP32-S3)
 
