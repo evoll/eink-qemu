@@ -76,7 +76,7 @@ for (const type of ['keydown', 'keyup']) document.addEventListener(type, event =
 }, {capture: true});
 window.addEventListener('blur', () => homeKey(false));
 // Keep these overrides in sync with eink-qemu/turbo-args.sh.
-function turboProperties(machine) {
+function turboProperties(machine, panel) {
     const properties = [
         // The X4 Pro and Picco cards sit on the S3's SDMMC host, not on SPI.
         ...(machine === 'x4pro' || machine === 'x4classic' || machine === 'picco' ? [] : ['read-access-us', 'read-seq-access-us', 'read-repeat-us', 'read-next-us',
@@ -91,7 +91,7 @@ function turboProperties(machine) {
         ...(machine === 'x3' ?
             [...['frame-us', 'refresh-overhead-us'].map(name => `uc8279.${name}=0`),
                 ...['pon-ms', 'pof-ms', 'busy-ms'].map(name => `uc8279.${name}=1`)] :
-            (machine === 'x4' || machine === 'picco') ? ['ssd1677.busy-ms=1'] :
+            (machine === 'x4' || machine === 'picco' || panel === 'ssd1677') ? ['ssd1677.busy-ms=1'] :
             ['uc8179.frame-us=1', ...['pon-ms', 'pof-ms', 'busy-ms'].map(name => `uc8179.${name}=1`)])
     ];
     return properties.flatMap(property => ['-global', property]);
@@ -235,14 +235,14 @@ window.addEventListener('message', async ({source, origin, data}) => {
             arguments: ['-L', '/', '-machine', (machine === 'x4pro' || machine === 'x4classic') ? `${machine},panel=${panel}` : machine,
                 '-accel', 'tcg,tb-size=64',
                 '-icount', `shift=${machine === 'picco' ? 2 : 0},sleep=${sleep}`,
-                ...(turbo ? turboProperties(machine) : []),
+                ...(turbo ? turboProperties(machine, panel) : []),
                 ...((machine === 'x4' || machine === 'picco' || panel === 'ssd1677') ? [] : ['-global', `${machine === 'x3' ? 'uc8279' : 'uc8179'}.ghosting=${ghosting ? 'on' : 'off'}`]),
                 '-drive', 'file=/flash.bin,if=mtd,format=raw,cache.direct=off',
                 '-drive', 'file=/sd.img,if=sd,format=raw,cache.direct=off',
                 '-chardev', 'stdio,id=cdc', '-serial', 'null', '-parallel', 'none',
                 '-global', 'driver=misc.esp32s3.usb_serial_jtag,property=chardev,value=cdc',
                 '-chardev', 'file,id=hmp,path=/dev/hmp,input-path=/dev/hmp,append=on',
-                '-mon', 'chardev=hmp,mode=readline', '-display', 'sdl,show-cursor=on',
+                '-object', 'monitor-hmp,id=hmp0,chardev=hmp', '-display', 'sdl,show-cursor=on',
                 // With Wi-Fi off the radio stays, with no access points to find.
                 '-nic', wifi ? 'browser,model=esp32_wifi' : 'hubport,hubid=0,model=esp32_wifi',
                 ...(wifi ? [] : ['-global', 'esp32_wifi.access-points=off'])],

@@ -31,12 +31,13 @@ GPIO7 respectively.
 
 The 1-bit SDMMC firmware pinout is CLK GPIO41, CMD GPIO42, DAT0 GPIO40;
 GPIO6 controls its power rail active-low. The shared I2C bus is SDA GPIO39 and
-SCL GPIO38 (firmware-configured at 400 kHz), with CW2017 at `0x63` and BM8563
-at `0x51`. Charge status is GPIO21; the emulator holds this input low so the firmware exposes battery/charging status in the emulated UI. GPIO1 is the active-high power latch.
+SCL GPIO38 (firmware-configured at 400 kHz), with QMI8658 at `0x6A`, CW2017
+at `0x63` and BM8563 at `0x51`. QMI8658 provides the motion sensor used for
+shake-based page turning. Charge status is GPIO21; the emulator holds this input low so the firmware exposes battery/charging status in the emulated UI. GPIO1 is the active-high power latch.
 GPIO4 is unused. The Classic has no touch controller or front light.
 
-**Current emulation limits:** the QEMU Classic profile attaches BM8563 and
-CW2017 to I2C, but does not yet model the GPIO1 power-latch sequence, GPIO6 SD
+**Current emulation limits:** the QEMU Classic profile attaches BM8563, QMI8658 and CW2017 to I2C. It
+does not yet model the GPIO1 power-latch sequence, GPIO6 SD
 power gating, or GPIO21 charger status. SDMMC access is provided by the SoC's
 SD card model; board-level power switching is not represented. The board
 profile does not yet implement the firmware's NVS `hw_calib/screenType`
@@ -44,7 +45,9 @@ controller-selection algorithm or bounded three-byte probing. Select the
 panel controller explicitly with the machine's `panel` property where
 available. UC8179, UC8279-68 and SSD1677 are selectable Classic panel models. The firmware binary identifies the `hw_calib/screenType` values as UC8179 (1/0x0B), UC8279 (2/0x0C) and SSD1677 (3); QEMU currently requires an explicit panel selection rather than reproducing the firmware NVS/probe algorithm. Automatic UC8279 variant/grayscale selection is not implemented.
 The firmware's CW2017 BATINFO/restart policy is not emulated as a dedicated
-board power policy. These limitations are intentionally documented rather
+board power policy. The QMI8658 model currently supplies the existing basic
+register-level sensor response; shake gesture fidelity still needs validation
+against the Classic firmware. These limitations are intentionally documented rather
 than approximated with incorrect GPIO levels or fabricated sensor behavior.
 
 ## Benchmarking firmware

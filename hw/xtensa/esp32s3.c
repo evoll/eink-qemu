@@ -1291,11 +1291,12 @@ static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
     /* Board rails / unused discrete status inputs. */
     /* GPIO4 is an unused input on this revision; keep it pulled high. */
     qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 4), 1);
-    /* GPIO21 is the active-high charge STAT input; no charger is attached. */
+    /* The firmware treats a low charger-status input as the normal idle state. */
     qemu_set_irq(qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, 21), 0);
     DeviceState *i2c0 = DEVICE(object_resolve_path_component(OBJECT(ss), "i2c0"));
     I2CBus *i2c = I2C_BUS(qdev_get_child_bus(i2c0, "i2c"));
     x4pro_add_i2c(i2c, "bm8563", 0x51);
+    x4pro_add_i2c(i2c, "qmi8658", 0x6a);
     x4pro_add_i2c(i2c, "cw2017", 0x63);
 }
 
