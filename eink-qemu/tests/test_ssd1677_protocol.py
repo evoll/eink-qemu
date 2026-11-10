@@ -22,6 +22,8 @@ typedef int QemuConsole;
 typedef int QEMUTimer;
 typedef int *qemu_irq;
 #define QEMU_CLOCK_VIRTUAL 0
+#define LOG_GUEST_ERROR 1
+#define qemu_log_mask(...) ((void)0)
 #define SSD1677(p) ((Ssd1677State *)(p))
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -187,6 +189,34 @@ static void ram_window_byte_addressing(void)
     free(s);
 }
 
+static void reversed_y_full_frame(void)
+{
+    Ssd1677State *s = calloc(1, sizeof(*s));
+    command(s, 0x12, NULL, 0);
+    /* X4 SSD1677 driver's gate scan is bottom-to-top: X+, Y-. */
+    command(s, 0x11, (uint8_t[]){0x01}, 1);
+    command(s, 0x44, (uint8_t[]){0, 0, 99, 0}, 4);
+    command(s, 0x45, (uint8_t[]){0xdf, 1, 0, 0}, 4);
+    command(s, 0x4e, (uint8_t[]){0, 0}, 2);
+    command(s, 0x4f, (uint8_t[]){0xdf, 1}, 2);
+    command(s, 0x24, NULL, 0);
+    /* A row-major 800x480 frame: first 100 bytes land at Y=479,
+     * then the counter walks down to Y=0 without leaving RAM. */
+    for (unsigned row = 0; row < H; row++) {
+        for (unsigned col = 0; col < WB; col++) {
+            ssd1677_transfer(&s->parent_obj, (row == 0) ? 0x7e : 0xff);
+        }
+    }
+    assert(s->ram_writes[PLANE_BW] == (uint64_t)WB * H);
+    assert(s->ram_oob_writes[PLANE_BW] == 0);
+    assert(s->ram[PLANE_BW][H - 1][0] == 0x7e);
+    assert(s->ram[PLANE_BW][0][0] == 0xff);
+    command(s, 0x20, NULL, 0);
+    /* Gate reversal maps the first transmitted row to the top of the image. */
+    assert(s->shown[0][0] == 0x3f); /* 0x7e => black, white, white, white */
+    free(s);
+}
+
 static void auto_fill_respects_ram_window(void)
 {
     Ssd1677State *s = calloc(1, sizeof(*s));
@@ -279,6 +309,7 @@ int main(int argc, char **argv)
     else if (!strcmp(argv[1], "lut")) lut_pixels();
     else if (!strcmp(argv[1], "window")) ram_window_byte_addressing();
     else if (!strcmp(argv[1], "autofill")) auto_fill_respects_ram_window();
+    else if (!strcmp(argv[1], "reverse-y")) reversed_y_full_frame();
     else abort();
     return 0;
 }
@@ -319,3 +350,6 @@ class SSD1677Protocol(unittest.TestCase):
 
     def test_auto_fill_is_limited_to_ram_window_and_preserves_cursor(self):
         self.check_case('autofill')
+
+    def test_x4_full_frame_uses_reverse_y_gate_scan_without_oob_writes(self):
+        self.check_case('reverse-y')

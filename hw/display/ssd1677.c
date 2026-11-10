@@ -73,6 +73,8 @@ struct Ssd1677State {
     int8_t gray_step[4];
 
     uint8_t ram[2][H][WB];
+    uint64_t ram_writes[2];
+    uint64_t ram_oob_writes[2];
     uint8_t shown[H][WB * 2];   /* last activated image as 2-bit pixels, packed */
     bool redraw;
 };
@@ -97,10 +99,13 @@ static void ssd1677_busy_done(void *opaque)
 
 static void ssd1677_ram_write(Ssd1677State *s, int plane, uint8_t v)
 {
+    s->ram_writes[plane]++;
     /* SSD1677 X addresses are byte columns (one address = eight pixels).
      * The X4 800x480 panel therefore exposes 100 columns x 480 rows. */
     if (s->xc < WB && s->yc < H) {
         s->ram[plane][s->yc][s->xc] = v;
+    } else {
+        s->ram_oob_writes[plane]++;
     }
 
     bool xinc = s->entry & 1, yinc = s->entry & 2;
@@ -226,6 +231,16 @@ static bool ssd1677_lut_steps(const uint8_t *lut, size_t len, int8_t step[4])
 
 static void ssd1677_activate(Ssd1677State *s)
 {
+    /* Keep a compact protocol trace in QEMU logs. This is particularly
+     * useful for diagnosing firmware/controller mismatches where the panel
+     * receives a valid refresh but only a narrow strip of RAM was written. */
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "SSD1677 refresh: entry=%02x window X=%u..%u Y=%u..%u "
+                  "cursor=(%u,%u) BW writes=%" PRIu64 " oob=%" PRIu64 " "
+                  "RED writes=%" PRIu64 " oob=%" PRIu64 "\n",
+                  s->entry, s->xs, s->xe, s->ys, s->ye, s->xc, s->yc,
+                  s->ram_writes[PLANE_BW], s->ram_oob_writes[PLANE_BW],
+                  s->ram_writes[PLANE_RED], s->ram_oob_writes[PLANE_RED]);
     uint8_t bw_opt = s->ctrl1[0] & 0xf, red_opt = s->ctrl1[0] >> 4;
     /* Update-control bit4 loads the controller's monochrome OTP LUT. */
     if (s->ctrl2 & 0x10) {
