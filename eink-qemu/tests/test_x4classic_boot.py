@@ -118,3 +118,26 @@ class X4ClassicBoard(unittest.TestCase):
             self.write(base + 0x58 + index * 4, command)
         self.write(base + 4, 1 << 5)
         self.assertEqual(self.read(base + 0x1c) & 0xff, 0x05)
+
+class X4ClassicPanelDefaults(unittest.TestCase):
+    def test_default_panel_is_ssd1677_and_other_revisions_remain_selectable(self):
+        source = (ROOT / 'hw/xtensa/esp32s3.c').read_text()
+        self.assertIn('s->ssd1677 = true;\n    s->uc8279_68 = false;', source)
+        self.assertIn('"Panel: ssd1677 (default), uc8179 or uc8279-68"', source)
+        self.assertIn('strcmp(value, "ssd1677") && strcmp(value, "uc8179") &&', source)
+
+    def test_shake_controls_are_temporarily_removed_from_frontends(self):
+        paths = [
+            ROOT / 'eink-qemu/desktop/index.html',
+            ROOT / 'eink-qemu/desktop/src/app.ts',
+            ROOT / 'eink-qemu/desktop/src/backend.ts',
+            ROOT / 'eink-qemu/desktop/src/backend-browser.ts',
+            ROOT / 'eink-qemu/wasm/web/runtime.js',
+            ROOT / 'eink-qemu/wasm/web/style.css',
+        ]
+        for path in paths:
+            with self.subTest(path=path.name):
+                text = path.read_text()
+                self.assertNotIn('shake-controls', text)
+                self.assertNotIn('api.shake', text)
+                self.assertNotIn("data.type === 'shake'", text)

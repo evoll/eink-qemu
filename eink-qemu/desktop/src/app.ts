@@ -404,21 +404,7 @@ function buttons(machine: Machine) {
     });
     keys.append(element);
   }
-  const shakeControls = $('shake-controls');
-  shakeControls.replaceChildren();
-  shakeControls.hidden = machine !== 'x4classic';
-  if (machine === 'x4classic') {
-    for (const [direction, label] of [['left', '←'], ['right', '→']] as const) {
-      const element = document.createElement('button');
-      element.type = 'button';
-      element.className = 'shake-control';
-      element.textContent = label;
-      element.title = direction === 'left' ? 'Simulate shaking left' : 'Simulate shaking right';
-      element.setAttribute('aria-label', element.title);
-      element.addEventListener('click', () => { if (session.state === 'running') void api.shake?.(direction); });
-      shakeControls.append(element);
-    }
-  }
+
 }
 
 // Lifts the emulated finger, if one is down (lost capture, blur, reset, stop).

@@ -275,12 +275,6 @@ a.icon-button:hover { background: var(--surface-2); color: var(--text); }
   padding: 0 5px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg);
 }
 #keys button:active, #keys button.held { background: var(--brand-tint); border-color: var(--meter); }
-#shake-controls { position: absolute; inset: 0; pointer-events: none; }
-#shake-controls[hidden] { display: none; }
-#shake-controls .shake-control { position: absolute; top: 50%; transform: translateY(-50%); width: 56px; height: 56px; padding: 0; border: 2px solid #cf5148; border-radius: 6px; background: color-mix(in srgb, var(--surface) 82%, transparent); color: var(--text); font-size: 28px; pointer-events: auto; touch-action: manipulation; }
-#shake-controls .shake-control:first-child { left: max(8px, calc(50% - 246px)); }
-#shake-controls .shake-control:last-child { right: max(8px, calc(50% - 246px)); }
-#shake-controls .shake-control:active { background: var(--brand-tint); }
 #keys:is([data-machine="x3"], [data-machine="x4"]) button:is(:nth-child(3), :nth-child(5), :nth-child(7)),
 #keys[data-machine="x4pro"] button:is(:nth-child(2), :nth-child(4)) { margin-left: 12px; }
 

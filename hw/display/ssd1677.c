@@ -97,30 +97,39 @@ static void ssd1677_busy_done(void *opaque)
 
 static void ssd1677_ram_write(Ssd1677State *s, int plane, uint8_t v)
 {
-    /* SSD1677 exposes X counters in pixel coordinates, but each 0x24/0x26
-     * data byte covers eight adjacent pixels. Keep the counter in pixels and
-     * convert to the byte index only when storing the RAM byte. */
-    if (!(s->entry & 1)) {
-        v = revbit8(v);
-    }
-    if (s->xc < W && s->yc < H) {
-        s->ram[plane][s->yc][s->xc / 8] = v;
+    /* SSD1677 X addresses are byte columns (one address = eight pixels).
+     * The X4 800x480 panel therefore exposes 100 columns x 480 rows. */
+    if (s->xc < WB && s->yc < H) {
+        s->ram[plane][s->yc][s->xc] = v;
     }
 
-    /* ID1/ID0 select X/Y direction. AM (bit 2) selects address order; the
-     * Xteink driver uses horizontal addressing (AM=0). */
     bool xinc = s->entry & 1, yinc = s->entry & 2;
-    bool x_at_end = xinc ? s->xc / 8 >= s->xe / 8 :
-                           s->xc / 8 <= s->xe / 8;
-    if (!x_at_end) {
-        s->xc = xinc ? s->xc + 8 : (s->xc >= 8 ? s->xc - 8 : 0);
-        return;
-    }
-    s->xc = s->xs;
-    if (s->yc == s->ye) {
+    bool y_first = s->entry & 4;
+    bool x_at_end = xinc ? s->xc >= s->xe : s->xc <= s->xe;
+    bool y_at_end = yinc ? s->yc >= s->ye : s->yc <= s->ye;
+
+    if (y_first) {
+        if (!y_at_end) {
+            s->yc = yinc ? s->yc + 1 : s->yc - 1;
+            return;
+        }
         s->yc = s->ys;
+        if (!x_at_end) {
+            s->xc = xinc ? s->xc + 1 : s->xc - 1;
+        } else {
+            s->xc = s->xs;
+        }
     } else {
-        s->yc = yinc ? s->yc + 1 : (s->yc ? s->yc - 1 : 0);
+        if (!x_at_end) {
+            s->xc = xinc ? s->xc + 1 : s->xc - 1;
+            return;
+        }
+        s->xc = s->xs;
+        if (!y_at_end) {
+            s->yc = yinc ? s->yc + 1 : s->yc - 1;
+        } else {
+            s->yc = s->ys;
+        }
     }
 }
 
@@ -296,18 +305,18 @@ static void ssd1677_command_done(Ssd1677State *s)
              * white/black selector. Drivers commonly use 0xF7 here. */
             uint8_t fill = a[0];
             int plane = s->cmd == 0x46 ? PLANE_BW : PLANE_RED;
-            for (unsigned i = 0; i < W * H / 8; i++) {
-                uint16_t x = s->xc, y = s->yc;
-                bool in_x = (s->entry & 1) ?
-                    (x >= s->xs && x <= s->xe) :
-                    (x <= s->xs && x >= s->xe);
-                bool in_y = (s->entry & 2) ?
-                    (y >= s->ys && y <= s->ye) :
-                    (y <= s->ys && y >= s->ye);
-                if (!in_x || !in_y || x >= W || y >= H) {
-                    break;
+            bool x_valid = s->xs < WB && s->xe < WB &&
+                ((s->entry & 1) ? s->xs <= s->xe : s->xs >= s->xe);
+            bool y_valid = s->ys < H && s->ye < H &&
+                ((s->entry & 2) ? s->ys <= s->ye : s->ys >= s->ye);
+            if (x_valid && y_valid && s->xc < WB && s->yc < H) {
+                unsigned columns = s->xs <= s->xe ? s->xe - s->xs + 1 :
+                                                     s->xs - s->xe + 1;
+                unsigned rows = s->ys <= s->ye ? s->ye - s->ys + 1 :
+                                                  s->ys - s->ye + 1;
+                for (unsigned i = 0; i < columns * rows; i++) {
+                    ssd1677_ram_write(s, plane, fill);
                 }
-                ssd1677_ram_write(s, plane, fill);
             }
             s->xc = saved_x;
             s->yc = saved_y;
@@ -330,7 +339,7 @@ static void ssd1677_command_start(Ssd1677State *s, uint8_t c)
     switch (c) {
     case 0x12:  /* SWRESET */
         s->entry = 3;
-        s->xs = 0; s->xe = W - 1; s->ys = 0; s->ye = H - 1;
+        s->xs = 0; s->xe = WB - 1; s->ys = 0; s->ye = H - 1;
         s->xc = 0; s->yc = 0;
         s->ctrl1[0] = s->ctrl1[1] = 0;
         s->ctrl2 = 0;
