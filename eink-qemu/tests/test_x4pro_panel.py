@@ -71,6 +71,26 @@ static void identity(void)
     assert(uc8179_transfer(&s->parent_obj, 0xff) == 0);
     drop(s);
 }
+static void gpio_bitbang_identity(void)
+{
+    Uc8179State *s = make(false);
+    int sda_out = 1;
+    s->sda_out = &sda_out;
+    s->parent_obj.cs = false;
+    command(s, 0x70, NULL, 0);
+    uint8_t got[5] = {0};
+    for (int i = 0; i < 5; i++) {
+        for (int bit = 0; bit < 8; bit++) {
+            /* Firmware samples SDA at the rising edge. */
+            got[i] = (got[i] << 1) | (sda_out != 0);
+            uc8179_set_sclk(s, 0, 1);
+            uc8179_set_sclk(s, 0, 0);
+        }
+    }
+    assert(!memcmp(got, uc8179_rev, sizeof(got)));
+    drop(s);
+}
+
 static void timing(void)
 {
     Uc8179State *s = make(true);
@@ -248,6 +268,7 @@ int main(int argc, char **argv)
 {
     assert(argc == 2);
     if (!strcmp(argv[1], "identity")) identity();
+    else if (!strcmp(argv[1], "gpio_identity")) gpio_bitbang_identity();
     else if (!strcmp(argv[1], "timing")) timing();
     else if (!strcmp(argv[1], "lut")) lut();
     else if (!strcmp(argv[1], "addressing")) addressing();
@@ -303,6 +324,9 @@ static void drop(Uc8179State *s) { free(s->ink); free(s->frames); free(s); }
 
     def test_measured_identity(self):
         self.check_case('identity')
+
+    def test_gpio_bitbang_identity_samples_before_advancing(self):
+        self.check_case('gpio_identity')
 
     def test_long_lut_keeps_virtual_deadlines_representable(self):
         self.check_case('long_lut')

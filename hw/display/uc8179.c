@@ -818,25 +818,29 @@ static void uc8179_set_sclk(void *opaque, int n, int level)
 {
     Uc8179State *s = UC8179(opaque);
     bool rise = level && !s->sclk;
+    bool fall = !level && s->sclk;
 
     s->sclk = level;
-    if (!rise || s->parent_obj.cs) {     /* CS is active low */
+    if (s->parent_obj.cs) {             /* CS is active low */
         return;
     }
     if (uc8179_reading(s)) {
-        /* The host sampled the presented bit while SCL was low. */
-        if (++s->bits == 8) {
-            s->bits = 0;
-            s->pos++;
+        /* The host samples SDA on SCL rising. Keep the current bit stable
+         * through that edge; advance and present the next bit on falling. */
+        if (fall) {
+            if (++s->bits == 8) {
+                s->bits = 0;
+                s->pos++;
+            }
+            uc8179_present_bit(s);
         }
-    } else {
+    } else if (rise) {
         s->shift = (s->shift << 1) | s->sda_in;
         if (++s->bits == 8) {
             s->bits = 0;
             uc8179_byte(s, s->shift);
         }
     }
-    uc8179_present_bit(s);
 }
 
 static void uc8179_set_sda(void *opaque, int n, int level)
