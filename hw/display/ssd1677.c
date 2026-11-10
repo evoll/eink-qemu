@@ -61,6 +61,7 @@ struct Ssd1677State {
     bool in_reset;
     bool asleep;
     uint8_t cmd;
+    uint8_t last_cmd;
     uint32_t nargs;
     uint8_t args[MAX_ARGS];
 
@@ -348,6 +349,7 @@ static void ssd1677_command_start(Ssd1677State *s, uint8_t c)
         s->gray_diff = ssd1677_lut_steps(s->args, s->nargs, s->gray_step);
     }
     s->cmd = c;
+    s->last_cmd = c;
     s->nargs = 0;
     s->read_pos = 0;
 
@@ -603,6 +605,19 @@ static void ssd1677_get_refresh_ns(Object *obj, Visitor *v, const char *name,
     visit_type_uint64(v, name, &ns, errp);
 }
 
+static void ssd1677_get_diagnostics(Object *obj, Visitor *v, const char *name,
+                                     void *opaque, Error **errp)
+{
+    Ssd1677State *s = SSD1677(obj);
+    char *value = g_strdup_printf(
+        "SSD1677 diag: cmd=0x%02x entry=0x%02x window-x=%u..%u window-y=%u..%u cursor=%u,%u BW-writes=%" PRIu64 " BW-oob=%" PRIu64 " RED-writes=%" PRIu64 " RED-oob=%" PRIu64 " refreshes=%" PRIu64,
+        s->last_cmd, s->entry, s->xs, s->xe, s->ys, s->ye, s->xc, s->yc,
+        s->ram_writes[PLANE_BW], s->ram_oob_writes[PLANE_BW],
+        s->ram_writes[PLANE_RED], s->ram_oob_writes[PLANE_RED], s->refreshes);
+    visit_type_str(v, name, &value, errp);
+    g_free(value);
+}
+
 static void ssd1677_class_init(ObjectClass *klass, const void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
@@ -620,6 +635,8 @@ static void ssd1677_class_init(ObjectClass *klass, const void *data)
                               ssd1677_get_refreshes, NULL, NULL, NULL);
     object_class_property_add(klass, "refresh-ns", "uint64",
                               ssd1677_get_refresh_ns, NULL, NULL, NULL);
+    object_class_property_add(klass, "diagnostics", "str",
+                              ssd1677_get_diagnostics, NULL, NULL, NULL);
 }
 
 static const TypeInfo ssd1677_info = {
