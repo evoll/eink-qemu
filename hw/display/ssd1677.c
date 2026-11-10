@@ -101,17 +101,19 @@ static void ssd1677_busy_done(void *opaque)
 static void ssd1677_ram_write(Ssd1677State *s, int plane, uint8_t v)
 {
     s->ram_writes[plane]++;
-    /* SSD1677 X addresses are byte columns (one address = eight pixels).
-     * The X4 800x480 panel therefore exposes 100 columns x 480 rows. */
-    if (s->xc < WB && s->yc < H) {
-        s->ram[plane][s->yc][s->xc] = v;
+    /* The X4 firmware programs the SSD1677 X window in pixel coordinates
+     * (0..799), while each RAM transfer advances by one 8-pixel byte column.
+     * Keep the controller-visible pixel address separate from the RAM index.
+     */
+    if (s->xc < W && s->yc < H) {
+        s->ram[plane][s->yc][s->xc >> 3] = v;
     } else {
         s->ram_oob_writes[plane]++;
     }
 
     bool xinc = s->entry & 1, yinc = s->entry & 2;
     bool y_first = s->entry & 4;
-    bool x_at_end = xinc ? s->xc >= s->xe : s->xc <= s->xe;
+    bool x_at_end = xinc ? (s->xc + 8 > s->xe) : (s->xc <= s->xe);
     bool y_at_end = yinc ? s->yc >= s->ye : s->yc <= s->ye;
 
     if (y_first) {
@@ -121,13 +123,13 @@ static void ssd1677_ram_write(Ssd1677State *s, int plane, uint8_t v)
         }
         s->yc = s->ys;
         if (!x_at_end) {
-            s->xc = xinc ? s->xc + 1 : s->xc - 1;
+            s->xc = xinc ? s->xc + 8 : s->xc - 8;
         } else {
             s->xc = s->xs;
         }
     } else {
         if (!x_at_end) {
-            s->xc = xinc ? s->xc + 1 : s->xc - 1;
+            s->xc = xinc ? s->xc + 8 : s->xc - 8;
             return;
         }
         s->xc = s->xs;
@@ -321,13 +323,14 @@ static void ssd1677_command_done(Ssd1677State *s)
              * white/black selector. Drivers commonly use 0xF7 here. */
             uint8_t fill = a[0];
             int plane = s->cmd == 0x46 ? PLANE_BW : PLANE_RED;
-            bool x_valid = s->xs < WB && s->xe < WB &&
+            bool x_valid = s->xs < W && s->xe < W &&
                 ((s->entry & 1) ? s->xs <= s->xe : s->xs >= s->xe);
             bool y_valid = s->ys < H && s->ye < H &&
                 ((s->entry & 2) ? s->ys <= s->ye : s->ys >= s->ye);
-            if (x_valid && y_valid && s->xc < WB && s->yc < H) {
-                unsigned columns = s->xs <= s->xe ? s->xe - s->xs + 1 :
-                                                     s->xs - s->xe + 1;
+            if (x_valid && y_valid && s->xc < W && s->yc < H) {
+                unsigned xspan = s->xs <= s->xe ? s->xe - s->xs :
+                                                   s->xs - s->xe;
+                unsigned columns = xspan / 8 + 1;
                 unsigned rows = s->ys <= s->ye ? s->ye - s->ys + 1 :
                                                   s->ys - s->ye + 1;
                 for (unsigned i = 0; i < columns * rows; i++) {
@@ -356,7 +359,7 @@ static void ssd1677_command_start(Ssd1677State *s, uint8_t c)
     switch (c) {
     case 0x12:  /* SWRESET */
         s->entry = 3;
-        s->xs = 0; s->xe = WB - 1; s->ys = 0; s->ye = H - 1;
+        s->xs = 0; s->xe = W - 1; s->ys = 0; s->ye = H - 1;
         s->xc = 0; s->yc = 0;
         s->ctrl1[0] = s->ctrl1[1] = 0;
         s->ctrl2 = 0;
