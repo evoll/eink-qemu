@@ -120,10 +120,10 @@ class X4ClassicBoard(unittest.TestCase):
         self.assertEqual(self.read(base + 0x1c) & 0xff, 0x05)
 
 class X4ClassicPanelDefaults(unittest.TestCase):
-    def test_default_panel_is_ssd1677_and_other_revisions_remain_selectable(self):
+    def test_default_panel_is_uc8279_and_other_revisions_remain_selectable(self):
         source = (ROOT / 'hw/xtensa/esp32s3.c').read_text()
-        self.assertIn('s->ssd1677 = true;\n    s->uc8279_68 = false;', source)
-        self.assertIn('"Panel: ssd1677 (default), uc8179 or uc8279-68"', source)
+        self.assertIn('s->ssd1677 = false;\n    s->uc8279_68 = true;', source)
+        self.assertIn('"Panel: uc8279-68 (default), uc8179 or ssd1677"', source)
         self.assertIn('strcmp(value, "ssd1677") && strcmp(value, "uc8179") &&', source)
 
     def test_x4classic_app_composition_always_seeds_selected_screen_type(self):

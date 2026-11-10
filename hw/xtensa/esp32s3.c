@@ -1370,7 +1370,7 @@ static void x4classic_machine_class_init(ObjectClass *oc, const void *data)
     mc->default_ram_size = 8 * MiB;
     compat_props_add(mc->compat_props, globals, ARRAY_SIZE(globals));
     object_class_property_add_str(oc, "panel", x4classic_get_panel, x4classic_set_panel);
-    object_class_property_set_description(oc, "panel", "Panel: ssd1677 (default), uc8179 or uc8279-68");
+    object_class_property_set_description(oc, "panel", "Panel: uc8279-68 (default), uc8179 or ssd1677");
 }
 
 static void x4pro_machine_instance_init(Object *obj)
@@ -1477,8 +1477,8 @@ static const TypeInfo picco_info = {
 static void x4classic_machine_instance_init(Object *obj)
 {
     Esp32s3MachineState *s = ESP32S3_MACHINE(obj);
-    s->ssd1677 = true;
-    s->uc8279_68 = false;
+    s->ssd1677 = false;
+    s->uc8279_68 = true;
 }
 
 static const TypeInfo x4classic_info = {
