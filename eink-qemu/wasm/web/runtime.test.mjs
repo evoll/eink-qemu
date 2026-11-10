@@ -7,7 +7,7 @@ async function boot(machine, panel, turbo = false, wifi = false) {
     const listeners = {}, scripts = [];
     const window = {addEventListener: (name, fn) => { listeners[name] = fn; }};
     const parent = {location: {search: ''}, postMessage() {}};
-    const context = vm.createContext({window, parent, TextDecoder, URLSearchParams, clearTimeout() {},
+    const context = vm.createContext({window, parent, TextDecoder, URLSearchParams, clearTimeout() {}, clearInterval() {},
         location: {origin: 'http://localhost'},
         document: {querySelector: () => ({}), addEventListener() {},
             createElement: () => ({}), body: {append: script => scripts.push(script.src)}}});
