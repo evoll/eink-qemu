@@ -186,20 +186,20 @@ static void auto_fill_respects_ram_window(void)
     command(s, 0x45, (uint8_t[]){0, 0, 1, 0}, 4);
     command(s, 0x4e, (uint8_t[]){0, 0}, 2);
     command(s, 0x4f, (uint8_t[]){0, 0}, 2);
-    command(s, 0x46, (uint8_t[]){0x80}, 1);
-    assert(s->ram[PLANE_BW][0][0] == 0xff);
-    assert(s->ram[PLANE_BW][0][1] == 0xff);
-    assert(s->ram[PLANE_BW][1][0] == 0xff);
-    assert(s->ram[PLANE_BW][1][1] == 0xff);
+    command(s, 0x46, (uint8_t[]){0xf7}, 1);
+    assert(s->ram[PLANE_BW][0][0] == 0xf7);
+    assert(s->ram[PLANE_BW][0][1] == 0xf7);
+    assert(s->ram[PLANE_BW][1][0] == 0xf7);
+    assert(s->ram[PLANE_BW][1][1] == 0xf7);
     assert(s->ram[PLANE_BW][0][2] == 0x00);
     assert(s->ram[PLANE_BW][1][2] == 0x00);
     assert(s->ram[PLANE_BW][2][0] == 0x00);
     /* Auto-fill leaves the host's address cursor unchanged. */
     assert(s->xc == 0 && s->yc == 0);
 
-    command(s, 0x47, (uint8_t[]){0x00}, 1);
-    assert(s->ram[PLANE_RED][0][0] == 0x00);
-    assert(s->ram[PLANE_RED][1][1] == 0x00);
+    command(s, 0x47, (uint8_t[]){0x5a}, 1);
+    assert(s->ram[PLANE_RED][0][0] == 0x5a);
+    assert(s->ram[PLANE_RED][1][1] == 0x5a);
     assert(s->ram[PLANE_RED][0][2] == 0x00);
     free(s);
 }

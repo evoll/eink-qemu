@@ -292,7 +292,9 @@ static void ssd1677_command_done(Ssd1677State *s)
              * host-programmed counters: these commands perform the fill
              * internally and do not consume the subsequent RAM-write cursor. */
             uint16_t saved_x = s->xc, saved_y = s->yc;
-            uint8_t fill = (a[0] & 0x80) ? 0xff : 0x00;
+            /* The argument is the 8-bit fill pattern, not a one-bit
+             * white/black selector. Drivers commonly use 0xF7 here. */
+            uint8_t fill = a[0];
             int plane = s->cmd == 0x46 ? PLANE_BW : PLANE_RED;
             for (unsigned i = 0; i < W * H / 8; i++) {
                 uint16_t x = s->xc, y = s->yc;
