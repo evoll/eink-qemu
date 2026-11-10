@@ -59,7 +59,12 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
   progress('Composing 16 MiB flash image…');
   const crosspointApp = FlashImage.hasCStrings(bytes, crosspoint.detect.image_strings);
   const x3Seed = crosspoint.nvs_seed.machines.includes(machine) && crosspointApp;
-  const x4ClassicSeed = machine === 'x4classic' && crosspointApp;
+  // CrossPoint 2.x X4 Classic images do not necessarily contain the legacy
+  // cphw/dev_det C strings used by the X3 detector. The selected X4 Classic
+  // panel is authoritative for this emulated board, so always seed its
+  // screenType in newly composed app images. Full/merged flash images above
+  // deliberately pass through unchanged.
+  const x4ClassicSeed = machine === 'x4classic';
   const seedAsset = x3Seed ? 'nvs-crosspoint.bin'
     : x4ClassicSeed ? `nvs-x4classic-${panel}.bin` : null;
   const [boot, partitions, nvs] = await Promise.all([

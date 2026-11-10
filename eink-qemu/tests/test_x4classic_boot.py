@@ -126,6 +126,13 @@ class X4ClassicPanelDefaults(unittest.TestCase):
         self.assertIn('"Panel: ssd1677 (default), uc8179 or uc8279-68"', source)
         self.assertIn('strcmp(value, "ssd1677") && strcmp(value, "uc8179") &&', source)
 
+    def test_x4classic_app_composition_always_seeds_selected_screen_type(self):
+        firmware = (ROOT / 'eink-qemu/desktop/src/firmware.ts').read_text()
+        resources = (ROOT / 'eink-qemu/desktop/scripts/prepare-resources.sh').read_text()
+        self.assertIn("const x4ClassicSeed = machine === 'x4classic';", firmware)
+        self.assertIn("('uc8179', 1), ('uc8279-68', 2), ('ssd1677', 3)", resources)
+        self.assertIn('nvs-x4classic-${panel}.bin', firmware)
+
     def test_shake_controls_are_temporarily_removed_from_frontends(self):
         paths = [
             ROOT / 'eink-qemu/desktop/index.html',
