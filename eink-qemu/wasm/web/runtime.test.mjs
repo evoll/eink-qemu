@@ -160,3 +160,17 @@ test('browser backend permits heap-end while a Stop request is pending', () => {
     const source = readFileSync(new URL('../../desktop/src/backend-browser.ts', import.meta.url), 'utf8');
     assert.match(source, /type === 'heap-end' && session\.state === 'stopping'/);
 });
+
+
+test('Heap reads retain QEMU monitor diagnostics for failed memory dumps', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testMonitorLine = monitorLine; globalThis.__setHeapOutput = value => heapReadMonitorOutput = value; globalThis.__getHeapOutput = () => heapReadMonitorOutput;';
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
+        parent: {location: {search: ''}, postMessage() {}}, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    vm.runInContext(source, context);
+    context.__setHeapOutput([]);
+    context.__getHeapOutput().push('memsave: cannot access guest address');
+    context.__testMonitorLine('VM status: paused');
+    assert.deepEqual(Array.from(context.__getHeapOutput()), ['memsave: cannot access guest address']);
+});

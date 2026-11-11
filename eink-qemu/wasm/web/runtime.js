@@ -7,6 +7,7 @@ let monitorOutput = '';
 const monitorDecoder = new TextDecoder();
 let machineType, homeHeld = false, heapHold = false;
 let panelDiagTimer = 0, panelDiagPending = false;
+let heapReadMonitorOutput = null;
 // Actions that need the VM stopped (snapshots, SD card operations), FIFO.
 // Each one runs on the 'VM status: paused' line of its own 'info status'.
 const pauses = [];
@@ -104,6 +105,13 @@ function output(line) {
 // Lines the monitor prints: prompts, echo of the page's own commands and
 // their answers. Only the 'VM status' answer drives the page; nothing is logged.
 function monitorLine(line) {
+    // Preserve HMP diagnostics for Heap reads. A missing output file alone
+    // cannot distinguish an unsupported command, an unmapped address, or a
+    // QEMU-side file creation failure.
+    if (heapReadMonitorOutput && !line.includes('VM status: paused') && !line.trim().startsWith('(qemu)')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('memsave ')) heapReadMonitorOutput.push(trimmed);
+    }
     if (panelDiagPending && line.trim() && !line.includes('qom-get') && !line.includes('(qemu)')) {
         panelDiagPending = false;
         send('log', {line: `[QEMU] ${line.trim()}`});
@@ -167,6 +175,7 @@ function heapRead({id, addr, size}) {
     }
     whilePaused(() => {
         const path = `/heap-read-${id}.bin`;
+        heapReadMonitorOutput = [];
         try { Module.FS.unlink(path); } catch {}
         // ESP-IDF heap pointers are CPU virtual addresses (e.g. 0x3fc88000).
         // HMP memsave translates them through the selected CPU; pmemsave
@@ -176,10 +185,14 @@ function heapRead({id, addr, size}) {
             try {
                 const bytes = Module.FS.readFile(path);
                 Module.FS.unlink(path);
+                heapReadMonitorOutput = null;
                 parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
             } catch (error) {
                 try { Module.FS.unlink(path); } catch {}
-                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${describeFsError(error)}`}});
+                const detail = describeFsError(error);
+                const monitor = heapReadMonitorOutput?.filter(line => !line.includes('info status')).slice(-6).join(' | ');
+                heapReadMonitorOutput = null;
+                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${detail}${monitor ? `; QEMU: ${monitor}` : '; QEMU returned no diagnostic output'}`}});
             }
             return heapHold ? undefined : 'cont';
         }});
