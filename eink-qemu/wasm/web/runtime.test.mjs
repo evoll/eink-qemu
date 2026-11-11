@@ -120,7 +120,7 @@ test('empty pause queue is a no-op after the last paused action', () => {
 });
 
 
-test('heap reads quote an absolute MEMFS path and use virtual memsave', () => {
+test('heap reads quote an absolute MEMFS path and use pmemsave like the desktop backend', () => {
     const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
         '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine; globalThis.__testMonitorInput = monitorInput;';
     const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
@@ -130,11 +130,11 @@ test('heap reads quote an absolute MEMFS path and use virtual memsave', () => {
     vm.runInContext(source, context);
     context.__testHeapRead({id: 42, addr: 0x3fc88000, size: 128});
     context.__testMonitorInput.length = 0;
-    // The pause acknowledgment executes the heap-read action and queues memsave.
+    // The pause acknowledgment executes the heap-read action and queues pmemsave.
     context.__testMonitorLine('VM status: paused');
     const commands = new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput));
-    assert.match(commands, /memsave 0x3fc88000 128 \"\/heap-read-42\.bin\"/);
-    assert.doesNotMatch(commands, /pmemsave/);
+    assert.match(commands, /pmemsave 0x3fc88000 128 \"\/heap-read-42\.bin\"/);
+    assert.doesNotMatch(commands, /(^|\\n)memsave /);
 });
 
 test('a pending Stop is released after an active Heap transaction ends', () => {
@@ -170,7 +170,7 @@ test('Heap reads retain QEMU monitor diagnostics for failed memory dumps', () =>
         document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
     vm.runInContext(source, context);
     context.__setHeapOutput([]);
-    context.__getHeapOutput().push('memsave: cannot access guest address');
+    context.__getHeapOutput().push('pmemsave: cannot access guest address');
     context.__testMonitorLine('VM status: paused');
-    assert.deepEqual(Array.from(context.__getHeapOutput()), ['memsave: cannot access guest address']);
+    assert.deepEqual(Array.from(context.__getHeapOutput()), ['pmemsave: cannot access guest address']);
 });

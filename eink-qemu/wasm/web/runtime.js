@@ -110,7 +110,7 @@ function monitorLine(line) {
     // QEMU-side file creation failure.
     if (heapReadMonitorOutput && !line.includes('VM status: paused') && !line.trim().startsWith('(qemu)')) {
         const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith('memsave ')) heapReadMonitorOutput.push(trimmed);
+        if (trimmed && !trimmed.startsWith('memsave ') && !trimmed.startsWith('pmemsave ')) heapReadMonitorOutput.push(trimmed);
     }
     if (panelDiagPending && line.trim() && !line.includes('qom-get') && !line.includes('(qemu)')) {
         panelDiagPending = false;
@@ -177,9 +177,9 @@ function heapRead({id, addr, size}) {
         const path = `/heap-read-${id}.bin`; // Use an absolute MEMFS path so QEMU and the browser read the same file.
         heapReadMonitorOutput = [];
         try { Module.FS.unlink(path); } catch {}
-        // ESP-IDF heap pointers are CPU virtual addresses (e.g. 0x3fc88000).
-        // HMP memsave translates them through the selected CPU; pmemsave
-        // instead treats them as physical addresses and reads the wrong space.
+        // Match the desktop backend: QMP pmemsave reads the ESP32-S3 memory map
+        // at the addresses exposed by the emulator (e.g. 0x3fc88000). HMP
+        // memsave uses CPU virtual translation and is not equivalent here.
         // A second paused action is the completion barrier.
         pauses.unshift({heapSafe: true, action: () => {
             try {
@@ -196,7 +196,7 @@ function heapRead({id, addr, size}) {
             }
             return heapHold ? undefined : 'cont';
         }});
-        command(`memsave 0x${addr.toString(16)} ${size} \"${path}\"\ninfo status`);
+        command(`pmemsave 0x${addr.toString(16)} ${size} \"${path}\"\ninfo status`);
     }, true);
 }
 function heapBegin({id}) {
