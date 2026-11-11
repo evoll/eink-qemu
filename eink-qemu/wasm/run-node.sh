@@ -51,7 +51,11 @@ machine_args=$machine
 if [ "$machine" = x4pro ] && [ -n "${X4PANEL:-}" ]; then
     machine_args="$machine,panel=$X4PANEL"
 fi
-exec "${NODE:-node}" "${WASM_BUILD_DIR:-$build}/qemu-system-$arch.js" \
+# Emscripten's SDL glue expects the browser Screen API even for -display none.
+# Preload a minimal Node-only shim for headless smoke tests; this is not used by
+# the browser build or the desktop application.
+exec "${NODE:-node}" --require "$ROOT/eink-qemu/wasm/node-screen.js" \
+    "${WASM_BUILD_DIR:-$build}/qemu-system-$arch.js" \
     -L "/host$ROOT/pc-bios" \
     -accel "${WASM_ACCEL:-$accel}" \
     -machine "$machine_args" \
