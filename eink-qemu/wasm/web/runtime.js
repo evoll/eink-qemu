@@ -174,7 +174,7 @@ function heapRead({id, addr, size}) {
         return;
     }
     whilePaused(() => {
-        const path = `/heap-read-${id}.bin`;
+        const path = `heap-read-${id}.bin`; // HMP parses an unquoted leading slash as an expression.
         heapReadMonitorOutput = [];
         try { Module.FS.unlink(path); } catch {}
         // ESP-IDF heap pointers are CPU virtual addresses (e.g. 0x3fc88000).
@@ -196,7 +196,7 @@ function heapRead({id, addr, size}) {
             }
             return heapHold ? undefined : 'cont';
         }});
-        command(`memsave 0x${addr.toString(16)} ${size} ${path}\ninfo status`);
+        command(`memsave 0x${addr.toString(16)} ${size} \"${path}\"\ninfo status`);
     }, true);
 }
 function heapBegin({id}) {

@@ -185,7 +185,12 @@ $('heap-pause').addEventListener('click', () => {
   refresh();
 });
 $('heap-open').addEventListener('click', () => { void source?.openWindow().catch((error) => { problem = errorOf(error); refresh(); }); });
-$('heap-message-action').addEventListener('click', () => { if (source?.pickElf) void useElf(source.pickElf()); });
+$('heap-message-action').addEventListener('click', () => {
+  if (problem && problem.code !== 'EMISMATCH' && problem.code !== 'EINVAL' && problem.code !== 'ENOENT') {
+    problem = null;
+    refresh();
+  } else if (source?.pickElf) void useElf(source.pickElf());
+});
 pane.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (selected) select(null);
@@ -224,7 +229,9 @@ const bytesPerRow = (size: number) => rowBytes(size, scale);
 function refresh() {
   clearTimeout(timer);
   paint();
-  if (visible && !paused && running && source && !inflight) timer = window.setTimeout(poll, snap ? INTERVAL : 0);
+  // A hard read error stops automatic polling; otherwise a broken HMP request
+  // can pause/resume QEMU once per second forever. The error card offers Retry.
+  if (visible && !paused && running && source && !inflight && !problem) timer = window.setTimeout(poll, snap ? INTERVAL : 0);
 }
 
 async function poll() {
@@ -302,7 +309,7 @@ function paint() {
   } else if (problem?.code === 'EINVAL' || problem?.code === 'ENOENT') {
     message('Cannot use the ELF', problem.message, 'Choose another ELF…');
   } else if (problem) {
-    message('Cannot read the heaps', problem.message);
+    message('Cannot read the heaps', problem.message, 'Retry');
   } else if (!running) {
     message('The emulator is not running', 'Start the firmware to see its heaps. While it runs, the view pauses ' +
       'the emulator for a moment each second to read them.');
