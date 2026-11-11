@@ -51,6 +51,8 @@ LINK_FLAGS+=" -sMAXIMUM_MEMORY=2147483648"
 LINK_FLAGS+=" -sSTACK_SIZE=8388608 -sASYNCIFY_STACK_SIZE=1048576"
 LINK_FLAGS+=" -sEXIT_RUNTIME=1 -sEXPORT_ES6=0 -sENVIRONMENT=web,worker,node -sASYNCIFY_IMPORTS=ffi_call_js"
 LINK_FLAGS+=" -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,TTY,FS"
+# Heap reads use a WASM-only QEMU physical-memory bridge (not HMP text dumps).
+LINK_FLAGS+=" -sEXPORTED_FUNCTIONS=_main,_malloc,_free,_qemu_browser_read_physical_memory"
 LINK_FLAGS+=" -lnodefs.js"
 LINK_FLAGS+=" --js-library $ROOT/eink-qemu/wasm/clock-origin.js"
 LINK_FLAGS+=" --pre-js $ROOT/eink-qemu/wasm/net.js"

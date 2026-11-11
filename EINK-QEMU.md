@@ -330,13 +330,17 @@ side by side; `start`/`do`/`stop` keep a session for exploring step by step.
 Each step prints one JSON record. Prefer it to `drive.py` and to on-device
 scripting for anything the emulator models.
 
-To watch the firmware's heaps live, use the desktop app (`eink-qemu/desktop`):
-its Heap tab and heap window map every ESP-IDF 5.x TLSF heap (DRAM, RTC, and
-PSRAM on the X4 Pro) block by block, with a free-memory trend, allocation
-sites and call stacks, and a timeline that replays the allocation log. Each
-read stops the VM, copies the heap regions with `pmemsave` and resumes; under
-`-icount` the guest does not see the pause. The ELF must match the running app;
-the app finds one beside the firmware and loads the plugin below by itself.
+To watch the firmware's heaps live, use the Heap tab in the desktop app
+(`eink-qemu/desktop`) or browser emulator. Both views map ESP-IDF 5.x TLSF
+heaps (DRAM, RTC, and PSRAM on the X4 Pro) block by block, show the free-memory
+trend, and retain a timeline of snapshots. The browser backend reads guest
+physical memory through a WASM-only QEMU bridge to `address_space_read()`;
+it does not depend on HMP text output or host-side dump files. The VM is
+stopped for each snapshot and resumed afterwards; under `-icount` the guest
+does not see the pause. Without a matching firmware ELF, block allocation
+sites and call stacks are not symbolized. The desktop app can load the ELF and
+use the heaptrace plugin below for allocation tracing and timeline replay;
+the browser currently provides the ELF-free heap map and memory statistics.
 
 With `run.sh`, the heaptrace plugin alone logs which code allocated what:
 `run.sh flash.bin sd.img -plugin build/contrib/plugins/libheaptrace.so,elf=firmware.elf`

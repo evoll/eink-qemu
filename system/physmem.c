@@ -44,6 +44,7 @@
 #include "system/tcg.h"
 #include "system/qtest.h"
 #include "system/physmem.h"
+#include "system/address-spaces.h"
 #include "system/ramblock.h"
 #include "qemu/timer.h"
 #include "qemu/config-file.h"
@@ -3537,6 +3538,34 @@ void physical_memory_read(hwaddr addr, void *buf, hwaddr len)
     address_space_read(&address_space_memory, addr,
                        MEMTXATTRS_UNSPECIFIED, buf, len);
 }
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+
+/* Direct guest-physical-memory access for the browser Heap inspector.
+ * The caller stops the VM before invoking this function and owns the output
+ * buffer. Keep this bridge WASM-only: the native desktop Heap backend uses
+ * its existing Rust Guest::read implementation and is deliberately untouched.
+ */
+EMSCRIPTEN_KEEPALIVE
+int qemu_browser_read_physical_memory(uint32_t addr, uint8_t *buffer,
+                                      uint32_t len);
+
+int qemu_browser_read_physical_memory(uint32_t addr, uint8_t *buffer,
+                                      uint32_t len)
+{
+    MemTxResult result;
+
+    if (!buffer || !len || len > 32 * 1024 * 1024 ||
+        (uint64_t)addr + len > (uint64_t)UINT32_MAX + 1) {
+        return -EINVAL;
+    }
+
+    result = address_space_read(&address_space_memory, (hwaddr)addr,
+                                MEMTXATTRS_UNSPECIFIED, buffer, len);
+    return result == MEMTX_OK ? 0 : -(int)result;
+}
+#endif
 
 void physical_memory_write(hwaddr addr, const void *buf, hwaddr len)
 {

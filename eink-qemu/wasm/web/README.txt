@@ -36,9 +36,11 @@ page, or the button on the empty screen): any ESP32-C3 or ESP32-S3 app
 .bin, merged firmware .bin, an X4 Pro .xota update, or a 16 MiB flash dump;
 choosing the firmware starts the emulator (Start reruns it after Stop). The
 firmware card shows the file, the devices that take its chip, the X4 Pro's
-display panel and, in the desktop app, the ELF for the Heap tab; the browser
-has no Heap tab, since reading the guest's memory needs native QEMU. Wi-Fi,
-Ghosting and Turbo are the icon toggles beside Start. CrossPoint Reader's
+display panel and the optional firmware ELF. The browser Heap tab reads guest
+physical memory through a direct WASM QEMU bridge and displays ESP-IDF TLSF
+heap maps, live free-memory statistics and snapshot history. Allocation-site
+symbols and call stacks still require the desktop heaptrace/ELF workflow.
+Wi-Fi, Ghosting and Turbo are the icon toggles beside Start. CrossPoint Reader's
 release assets, for example:
   X3/X4:  crosspoint-<ver>-x3-x4.bin
   X4 Pro: crosspoint-<ver>-x4pro.bin
