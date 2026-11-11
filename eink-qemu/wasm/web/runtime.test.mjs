@@ -120,7 +120,7 @@ test('empty pause queue is a no-op after the last paused action', () => {
 });
 
 
-test('heap reads quote an absolute MEMFS path and use pmemsave like the desktop backend', () => {
+test('heap reads use physical pmemsave and fall back to HMP xp without host-file access', () => {
     const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
         '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine; globalThis.__testMonitorInput = monitorInput;';
     const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
@@ -133,7 +133,7 @@ test('heap reads quote an absolute MEMFS path and use pmemsave like the desktop 
     // The pause acknowledgment executes the heap-read action and queues pmemsave.
     context.__testMonitorLine('VM status: paused');
     const commands = new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput));
-    assert.match(commands, /pmemsave 0x3fc88000 128 \"\/heap-read-42\.bin\"/);
+    assert.match(commands, /pmemsave 0x3fc88000 128 \/heap-read-42\.bin/);
     assert.doesNotMatch(commands, /(^|\\n)memsave /);
 });
 
@@ -173,4 +173,48 @@ test('Heap reads retain QEMU monitor diagnostics for failed memory dumps', () =>
     context.__getHeapOutput().push('pmemsave: cannot access guest address');
     context.__testMonitorLine('VM status: paused');
     assert.deepEqual(Array.from(context.__getHeapOutput()), ['pmemsave: cannot access guest address']);
+});
+
+
+test('physical-memory HMP dump parser validates addresses and exact byte count', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testParsePhysicalDump = parsePhysicalDump;';
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
+        parent: {location: {search: ''}, postMessage() {}}, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    vm.runInContext(source, context);
+    const lines = [
+        '0x000000003fc88000: 0x00 0x01 0x02 0xff',
+        '0x000000003fc88004: 0x10 0x20 0x30 0x40',
+    ];
+    assert.deepEqual(Array.from(context.__testParsePhysicalDump(lines, 0x3fc88000, 8)), [0, 1, 2, 255, 16, 32, 48, 64]);
+    assert.throws(() => context.__testParsePhysicalDump(lines.slice(0, 1), 0x3fc88000, 8), /returned 4 of 8 bytes/);
+    assert.throws(() => context.__testParsePhysicalDump(lines, 0x3fc88004, 8), /returned 4 of 8 bytes/);
+});
+
+test('missing pmemsave output triggers xp fallback and returns physical bytes', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine; globalThis.__testMonitorInput = monitorInput;';
+    const sent = [];
+    const parent = {location: {search: ''}, postMessage: message => sent.push(message)};
+    const fs = {
+        lookupPath: () => ({node: {notifyListeners() {}}}),
+        unlink() {},
+        readFile() { const error = new Error('No such file or directory'); error.code = 'ENOENT'; throw error; },
+    };
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
+        parent, location: {origin: 'http://localhost'}, Module: {FS: fs},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    vm.runInContext(source, context);
+    context.__testHeapRead({id: 77, addr: 0x3fc88000, size: 8});
+    context.__testMonitorLine('VM status: paused');
+    context.__testMonitorLine('VM status: paused');
+    let commands = new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput));
+    assert.match(commands, /pmemsave 0x3fc88000 8 \/heap-read-77\.bin/);
+    assert.match(commands, /xp\/8bx 0x3fc88000/);
+    context.__testMonitorLine('0x000000003fc88000: 0x00 0x01 0x02 0x03 0x04 0x05 0x06 0xff');
+    context.__testMonitorLine('VM status: paused');
+    const result = sent.find(message => message.type === 'heap-read-result');
+    assert.equal(result?.ok, true);
+    assert.deepEqual(Array.from(result.bytes), [0, 1, 2, 3, 4, 5, 6, 255]);
 });

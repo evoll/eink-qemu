@@ -167,6 +167,24 @@ function describeFsError(error) {
     }
     return String(error);
 }
+function parsePhysicalDump(lines, addr, size) {
+    const bytes = new Uint8Array(size);
+    let cursor = 0;
+    for (const line of lines) {
+        const match = line.match(/^\s*0x([0-9a-f]+):\s*(.*)$/i);
+        if (!match) continue;
+        const lineAddress = Number.parseInt(match[1], 16);
+        if (!Number.isSafeInteger(lineAddress) || lineAddress !== addr + cursor) continue;
+        const values = [...match[2].matchAll(/\b0x([0-9a-f]{1,2})\b/gi)];
+        if (!values.length) continue;
+        for (const value of values) {
+            if (cursor >= size) break;
+            bytes[cursor++] = Number.parseInt(value[1], 16);
+        }
+    }
+    if (cursor !== size) throw new Error(`QEMU xp returned ${cursor} of ${size} bytes.`);
+    return bytes;
+}
 function heapRead({id, addr, size}) {
     if (!Number.isSafeInteger(id) || !Number.isInteger(addr) || addr < 0 || addr > 0xffffffff ||
         !Number.isInteger(size) || size < 1 || size > 32 * 1024 * 1024 || addr + size > 0x100000000) {
@@ -174,31 +192,59 @@ function heapRead({id, addr, size}) {
         return;
     }
     whilePaused(() => {
-        const path = `/heap-read-${id}.bin`; // Use an absolute MEMFS path so QEMU and the browser read the same file.
+        const path = `/heap-read-${id}.bin`;
         heapReadMonitorOutput = [];
         try { Module.FS.unlink(path); } catch {}
-        // Match the desktop backend: QMP pmemsave reads the ESP32-S3 memory map
-        // at the addresses exposed by the emulator (e.g. 0x3fc88000). HMP
-        // memsave uses CPU virtual translation and is not equivalent here.
-        // A second paused action is the completion barrier.
+        const fail = detail => {
+            const monitor = heapReadMonitorOutput?.filter(line => !line.includes('info status')).slice(-8).join(' | ');
+            heapReadMonitorOutput = null;
+            send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${detail}${monitor ? `; QEMU: ${monitor}` : '; QEMU returned no diagnostic output'}`}});
+        };
+        const complete = bytes => {
+            heapReadMonitorOutput = null;
+            parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
+        };
+        const readWithXp = (offset, result) => {
+            const count = Math.min(4096, size - offset);
+            const chunkAddress = addr + offset;
+            heapReadMonitorOutput = [];
+            pauses.unshift({heapSafe: true, action: () => {
+                try {
+                    const chunk = parsePhysicalDump(heapReadMonitorOutput || [], chunkAddress, count);
+                    result.set(chunk, offset);
+                    if (offset + count < size) {
+                        readWithXp(offset + count, result);
+                    } else {
+                        complete(result);
+                    }
+                } catch (error) {
+                    fail(`pmemsave did not create a readable file and physical-memory fallback failed: ${describeFsError(error)}`);
+                }
+                return heapHold ? undefined : 'cont';
+            }});
+            // xp reads guest physical memory directly and prints byte values to HMP.
+            // Chunking bounds monitor output while keeping the VM stopped for the full snapshot.
+            command(`xp/${count}bx 0x${chunkAddress.toString(16)}\ninfo status`);
+        };
         pauses.unshift({heapSafe: true, action: () => {
             try {
                 const bytes = Module.FS.readFile(path);
+                if (bytes.length !== size) throw new Error(`pmemsave produced ${bytes.length} of ${size} bytes.`);
                 Module.FS.unlink(path);
-                heapReadMonitorOutput = null;
-                parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
+                complete(bytes);
             } catch (error) {
                 try { Module.FS.unlink(path); } catch {}
-                const detail = describeFsError(error);
-                const monitor = heapReadMonitorOutput?.filter(line => !line.includes('info status')).slice(-6).join(' | ');
-                heapReadMonitorOutput = null;
-                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${detail}${monitor ? `; QEMU: ${monitor}` : '; QEMU returned no diagnostic output'}`}});
+                // Some Emscripten builds do not expose QEMU's pmemsave output
+                // file through MEMFS. Fall back to HMP xp, which dumps physical
+                // bytes through the monitor and avoids host-file I/O entirely.
+                readWithXp(0, new Uint8Array(size));
             }
             return heapHold ? undefined : 'cont';
         }});
-        command(`pmemsave 0x${addr.toString(16)} ${size} \"${path}\"\ninfo status`);
+        command(`pmemsave 0x${addr.toString(16)} ${size} ${path}\ninfo status`);
     }, true);
 }
+
 function heapBegin({id}) {
     if (heapHold) {
         send('heap-control-result', {id, ok: false, error: {code: 'EBUSY', message: 'A Heap memory transaction is already active.'}});
