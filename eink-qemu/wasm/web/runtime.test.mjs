@@ -38,7 +38,7 @@ test('turbo overrides measured panel power and refresh waits', async () => {
 test('new pixels on the canvas tell the page; repaints and blank frames do not', async () => {
     const sent = [], timers = [], canvas = {};
     class CanvasRenderingContext2D { putImageData() {} }
-    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, URLSearchParams,
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
         parent: {location: {search: ''}, postMessage: message => sent.push(message.type === 'screen' ? `screen:${message.blank ? 'blank' : 'drawn'}` : message.type)},
         location: {origin: 'http://localhost'}, CanvasRenderingContext2D, Uint32Array,
         setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout: id => { if (id) timers[id - 1] = () => {}; },
@@ -112,9 +112,27 @@ test('heap memory requests reject invalid or oversized ranges before pausing QEM
 test('empty pause queue is a no-op after the last paused action', () => {
     const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
         '\nglobalThis.__testNextPause = nextPause;';
-    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, URLSearchParams,
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
         parent: {location: {search: ''}, postMessage() {}}, location: {origin: 'http://localhost'},
         document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
     vm.runInContext(source, context);
     assert.doesNotThrow(() => context.__testNextPause());
+});
+
+
+test('heap reads use virtual memsave rather than physical pmemsave', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine; globalThis.__testMonitorInput = monitorInput;';
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
+        parent: {location: {search: ''}, postMessage() {}}, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    context.Module = {FS: {lookupPath: () => ({node: {}})}};
+    vm.runInContext(source, context);
+    context.__testHeapRead({id: 42, addr: 0x3fc88000, size: 128});
+    context.__testMonitorInput.length = 0;
+    // The pause acknowledgment executes the heap-read action and queues memsave.
+    context.__testMonitorLine('VM status: paused');
+    const commands = new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput));
+    assert.match(commands, /memsave 0x3fc88000 128 \/heap-read-42\.bin/);
+    assert.doesNotMatch(commands, /pmemsave/);
 });

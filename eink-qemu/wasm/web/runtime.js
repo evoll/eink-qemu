@@ -158,19 +158,21 @@ function heapRead({id, addr, size}) {
     whilePaused(() => {
         const path = `/heap-read-${id}.bin`;
         try { Module.FS.unlink(path); } catch {}
-        // HMP's pmemsave reads guest physical memory. A second paused action
-        // is the completion barrier: HMP processes pmemsave before info status.
+        // ESP-IDF heap pointers are CPU virtual addresses (e.g. 0x3fc88000).
+        // HMP memsave translates them through the selected CPU; pmemsave
+        // instead treats them as physical addresses and reads the wrong space.
+        // A second paused action is the completion barrier.
         pauses.unshift({heapSafe: true, action: () => {
             try {
                 const bytes = Module.FS.readFile(path);
                 Module.FS.unlink(path);
                 parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
             } catch (error) {
-                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${error.message}`}});
+                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${error?.message ?? String(error)}`}});
             }
             return heapHold ? undefined : 'cont';
         }});
-        command(`pmemsave 0x${addr.toString(16)} ${size} ${path}\ninfo status`);
+        command(`memsave 0x${addr.toString(16)} ${size} ${path}\ninfo status`);
     }, true);
 }
 function heapBegin({id}) {
