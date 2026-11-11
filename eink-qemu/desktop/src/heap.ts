@@ -20,7 +20,7 @@ export interface HeapSource {
   history(): Promise<HeapHistoryPoint[]>;
   stack(id: number): Promise<HeapStack | null>;
   sites(from: number): Promise<HeapSite[]>;
-  pickElf(): Promise<FileInfo | null>;
+  pickElf?(): Promise<FileInfo | null>;
   openWindow(): Promise<void>;
   /** The ELF was chosen here, from the Heap tab's message. */
   elfChosen?(info: FileInfo): void;
@@ -185,7 +185,7 @@ $('heap-pause').addEventListener('click', () => {
   refresh();
 });
 $('heap-open').addEventListener('click', () => { void source?.openWindow().catch((error) => { problem = errorOf(error); refresh(); }); });
-$('heap-message-action').addEventListener('click', () => { if (source) void useElf(source.pickElf()); });
+$('heap-message-action').addEventListener('click', () => { if (source?.pickElf) void useElf(source.pickElf()); });
 pane.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (selected) select(null);
@@ -193,7 +193,7 @@ pane.addEventListener('keydown', (e) => {
   else return;
   e.stopPropagation();
 });
-$('heap-note-action').addEventListener('click', () => { if (source) void useElf(source.pickElf()); });
+$('heap-note-action').addEventListener('click', () => { if (source?.pickElf) void useElf(source.pickElf()); });
 
 /* The scale: bytes per map row ------------------------------------------- */
 
@@ -335,7 +335,7 @@ function paint() {
     ? `${s.elfNote ? `${s.elfNote} ` : ''}Without the firmware's ELF, blocks are not coloured by allocation site and have no call stack.`
     : s.traced ? '' : s.traceNote ?? '';
   const action = $<HTMLButtonElement>('heap-note-action');
-  action.hidden = !noElf;
+  action.hidden = !noElf || !source?.pickElf;
   action.textContent = s.elfNote ? 'Choose another ELF…' : 'Load ELF…';
   $('heap-note').hidden = !$('heap-note-text').textContent;
 

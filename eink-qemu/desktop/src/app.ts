@@ -948,8 +948,8 @@ export async function boot(backend: Backend) {
   api = backend;
   const { can } = api;
   setHeapAvailable(can.heap);
-  $('setup-elf-section').hidden = !can.heap;
-  $('heap-open').hidden = !can.heap;
+  $('setup-elf-section').hidden = !can.heapElf;
+  $('heap-open').hidden = !can.heapWindow;
   $('card-menu').querySelector<HTMLElement>('[data-card="open"]')!.hidden = !can.cardOpen;
   $('card-menu').querySelector<HTMLElement>('[data-card="new"]')!.hidden = !can.cardNew;
   $('card-menu').querySelector<HTMLElement>('[data-card="resize"]')!.hidden = !can.cardResize;
@@ -969,7 +969,7 @@ export async function boot(backend: Backend) {
   if (state.session.seq > session.seq) session = state.session;
   attachHeap({
     snapshot: api.heapSnapshot, at: api.heapSnapshotAt, stack: api.heapStack, sites: api.heapSites, history: api.heapHistory,
-    pickElf: api.heapPickElf, openWindow: api.heapWindow, elfChosen: () => void refreshSetup(),
+    pickElf: can.heapElf ? api.heapPickElf : undefined, openWindow: api.heapWindow, elfChosen: () => void refreshSetup(),
   }, state.elf);
   heapSession(session.state, session.run);
   if (state.pane === 'heap' || state.pane === 'console') showPane(state.pane);

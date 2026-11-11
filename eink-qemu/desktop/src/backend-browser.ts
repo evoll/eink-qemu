@@ -11,8 +11,9 @@ import type { AttachHandlers, Backend, DropHandlers, FileRef, Screen } from './b
 import { firmwareStore, type KeptFirmware } from './firmware-store';
 import { deviceOf } from './devices';
 import { forwardKeyboard } from './keyboard';
+import { BrowserHeapReader } from './heap-browser';
 import {
-  AppError, type CardInfo, type FirmwareInfo, type MadeCard, type SdListing, type SessionInfo,
+  AppError, type CardInfo, type FirmwareInfo, type HeapPast, type HeapSnapshot, type MadeCard, type SdListing, type SessionInfo,
   type Settings, type Setup, type StartOptions, type UploadPlan,
 } from './types';
 
@@ -228,9 +229,12 @@ class FrameScreen implements Screen {
 let handlers: AttachHandlers | null = null;
 let frame: FrameScreen | null = null;
 let session: SessionInfo = { state: 'idle', machine: null, turbo: false, exit: null, run: 0, seq: 0 };
+let heapReader: BrowserHeapReader | null = null;
 function setSession(patch: Partial<SessionInfo>) {
   const was = session.state;
+  const oldRun = session.run;
   session = { ...session, ...patch, seq: session.seq + 1 };
+  if (patch.run !== undefined && patch.run !== oldRun) heapReader?.reset();
   handlers?.session(session);
   // The saved-card note says what saves next, which depends on the run.
   if (session.state !== was && noteSaved) cardNote(savedNote(), false, false, true);
@@ -258,6 +262,8 @@ let saving = 0, snapshotPending = false;
 let revision = 0, stale = false, noteSaved = false;
 let saves: Promise<unknown> = Promise.resolve();
 const calls = new Map<number, { resolve(result: unknown): void; reject(error: Error): void }>();
+const heapReads = new Map<number, { resolve(bytes: Uint8Array): void; reject(error: Error): void; timer: number }>();
+const heapControls = new Map<number, { resolve(): void; reject(error: Error): void; timer: number }>();
 let sequence = 0;
 let copyWanted: ((name: string) => void) | null = null;
 /** The largest card the page takes: the whole card lives in memory, in the
@@ -440,6 +446,10 @@ async function sdResult(data: { id: number; ok: boolean; result?: unknown; error
 function sdAbort(reason: string) {
   for (const call of calls.values()) call.reject(new AppError('EIO', reason));
   calls.clear();
+  for (const call of heapReads.values()) { clearTimeout(call.timer); call.reject(new AppError('EIDLE', reason)); }
+  heapReads.clear();
+  for (const call of heapControls.values()) { clearTimeout(call.timer); call.reject(new AppError('EIDLE', reason)); }
+  heapControls.clear();
 }
 
 /* The run. */
@@ -451,6 +461,19 @@ function endRun(exit: SessionInfo['exit']) {
   frame = null;
   setSession({ state: 'idle', machine: null, exit });
 }
+function heapControl(type: 'heap-begin' | 'heap-end'): Promise<void> {
+  if (!frame || session.state !== 'running') return Promise.reject(new AppError('EIDLE', 'The emulator is not running.'));
+  const id = ++sequence;
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      heapControls.delete(id);
+      reject(new AppError('ETIMEDOUT', `The Heap ${type === 'heap-begin' ? 'pause' : 'resume'} request timed out.`));
+    }, 20000);
+    heapControls.set(id, { resolve, reject, timer });
+    post({ type, id });
+  });
+}
+
 function onMessage({ source, origin, data }: MessageEvent) {
   if (!frame || source !== frame.el.contentWindow || origin !== location.origin || !data?.type) return;
   switch (data.type) {
@@ -501,6 +524,24 @@ function onMessage({ source, origin, data }: MessageEvent) {
     case 'sd-result':
       void sdResult(data);
       break;
+    case 'heap-control-result': {
+      const call = heapControls.get(data.id);
+      heapControls.delete(data.id);
+      if (!call) break;
+      clearTimeout(call.timer);
+      if (data.ok) call.resolve();
+      else call.reject(new AppError(data.error?.code ?? 'EIO', data.error?.message ?? 'Heap memory transaction failed.'));
+      break;
+    }
+    case 'heap-read-result': {
+      const call = heapReads.get(data.id);
+      heapReads.delete(data.id);
+      if (!call) break;
+      clearTimeout(call.timer);
+      if (data.ok) call.resolve(new Uint8Array(data.bytes));
+      else call.reject(new AppError(data.error?.code ?? 'EIO', data.error?.message ?? 'Guest-memory read failed.'));
+      break;
+    }
     case 'snapshot': {
       const bytes = data.bytes as Uint8Array;
       sdSyncInfo(bytes);
@@ -586,7 +627,7 @@ function dropped(transfer: DataTransfer): FileRef[] {
 }
 
 export const browser: Backend = {
-  can: { heap: false, cardOpen: true, cardNew: true, cardResize: false, cardRecent: false, cardSwitchRunning: false, cardReveal: false },
+  can: { heap: true, heapElf: false, heapWindow: false, cardOpen: true, cardNew: true, cardResize: false, cardRecent: false, cardSwitchRunning: false, cardReveal: false },
   cardSizes: [{ size: 64 * MiB, label: '64 MiB', note: 'The blank card bundled with this page' }],
   cardDefaultSize: 64 * MiB,
   cardSizeNote: 'The card lives in this browser: a card takes its full size in memory, so the bundled blank card is small. Open an SD image for a bigger one.',
@@ -802,14 +843,35 @@ export const browser: Backend = {
   sdRename: (path, name) => sdCall('rename', { path, name }),
   sdRemove: (path) => sdCall('remove', { path }),
 
-  heapPickElf: () => notSupported('The heap view'),
+  async heapReadMemory(addr: number, size: number): Promise<Uint8Array> {
+    if (!frame || session.state !== 'running') throw new AppError('EIDLE', 'Start the emulator before reading guest memory.');
+    if (!Number.isInteger(addr) || addr < 0 || addr > 0xffffffff || !Number.isInteger(size) || size < 1 || size > 32 * MiB || addr + size > 0x100000000) {
+      throw new AppError('EINVAL', 'Invalid guest-memory range (maximum 32 MiB).');
+    }
+    const id = ++sequence;
+    return new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        heapReads.delete(id);
+        reject(new AppError('ETIMEDOUT', 'The guest-memory read did not complete within 20 seconds.'));
+      }, 20000);
+      heapReads.set(id, { resolve, reject, timer });
+      post({ type: 'heap-read', id, addr, size });
+    });
+  },
+  heapPickElf: () => Promise.resolve(null),
   heapUseElf: () => notSupported('The heap view'),
   heapForgetElf: () => notSupported('The heap view'),
-  heapSnapshot: () => notSupported('The heap view'),
-  heapSnapshotAt: () => notSupported('The heap view'),
+  async heapSnapshot(): Promise<HeapSnapshot> {
+    if (!frame || session.state !== 'running') throw new AppError('EIDLE', 'Start the emulator before opening Heap.');
+    heapReader ??= new BrowserHeapReader((addr, size) => browser.heapReadMemory!(addr, size), () => session.machine, () => heapControl('heap-begin'), () => heapControl('heap-end'));
+    return heapReader.snapshot();
+  },
+  async heapSnapshotAt(time: number): Promise<HeapPast | null> {
+    return heapReader?.at(time) ?? null;
+  },
   heapStack: () => notSupported('The heap view'),
   heapSites: () => notSupported('The heap view'),
-  heapHistory: () => notSupported('The heap view'),
+  async heapHistory() { return heapReader?.history() ?? []; },
   heapEvents: () => notSupported('The heap view'),
   heapWindow: () => notSupported('The heap window'),
 

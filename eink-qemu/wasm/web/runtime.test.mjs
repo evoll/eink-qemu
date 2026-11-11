@@ -93,3 +93,17 @@ test('X4 Classic SSD1677 selection does not receive UC8179 ghosting globals', as
     assert.ok(!args.some(arg => arg.startsWith('uc8179.ghosting=')));
     assert.ok(!args.some(arg => arg.startsWith('ssd1677.ghosting=')));
 });
+
+test('heap memory requests reject invalid or oversized ranges before pausing QEMU', async () => {
+    const listeners = {}, sent = [];
+    const parent = {location: {search: ''}, postMessage: message => sent.push(message)};
+    const context = vm.createContext({window: {addEventListener: (name, fn) => { listeners[name] = fn; }},
+        parent, TextDecoder, URLSearchParams, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    vm.runInContext(readFileSync(new URL('./runtime.js', import.meta.url), 'utf8'), context);
+    await listeners.message({source: parent, origin: 'http://localhost', data: {type: 'heap-read', id: 7, addr: 0x3fc80000, size: 32 * 1024 * 1024 + 1}});
+    await listeners.message({source: parent, origin: 'http://localhost', data: {type: 'heap-read', id: 8, addr: -1, size: 16}});
+    assert.deepEqual(sent.filter(message => message.type === 'heap-read-result').map(message => [message.id, message.ok, message.error.code]), [
+        [7, false, 'EINVAL'], [8, false, 'EINVAL'],
+    ]);
+});

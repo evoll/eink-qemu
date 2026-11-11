@@ -141,7 +141,7 @@ export const tauri: Backend = coordinateBridgeLaunch({
       return () => { disposed = true; window.clearInterval(timer); unlisten(); };
     },
   },
-  can: { heap: true, cardOpen: true, cardNew: true, cardResize: true, cardRecent: true, cardSwitchRunning: true, cardReveal: true },
+  can: { heap: true, heapElf: true, heapWindow: true, cardOpen: true, cardNew: true, cardResize: true, cardRecent: true, cardSwitchRunning: true, cardReveal: true },
   /** All with the stock card's 32 KiB clusters (sd.rs). */
   cardSizes: [
     { size: 2050 * MiB, label: '2 GiB', note: 'The stock X3 card (2050 MiB): use it to compare timing with a real device' },

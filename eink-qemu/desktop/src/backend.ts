@@ -16,6 +16,10 @@ export interface FileRef { ref: string; name: string }
 export interface Capabilities {
   /** The Heap tab and the firmware's ELF: reading the guest's memory needs native QEMU. */
   heap: boolean;
+  /** Browser Heap can scan memory without ELF; native also supports ELF symbolization. */
+  heapElf: boolean;
+  /** Separate resizable Heap window. */
+  heapWindow: boolean;
   /** The card menu's items. */
   cardOpen: boolean;
   cardNew: boolean;
@@ -114,6 +118,8 @@ export interface Backend {
   heapPickElf(): Promise<FileInfo | null>;
   heapUseElf(ref: string): Promise<FileInfo>;
   heapForgetElf(): Promise<void>;
+  /** Read a bounded range of guest physical memory (browser runtime only). */
+  heapReadMemory?(addr: number, size: number): Promise<Uint8Array>;
   heapSnapshot(): Promise<HeapSnapshot>;
   heapSnapshotAt(time: number): Promise<HeapPast | null>;
   heapStack(id: number): Promise<HeapStack | null>;

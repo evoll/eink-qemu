@@ -5,7 +5,7 @@
 const monitorInput = [];
 let monitorOutput = '';
 const monitorDecoder = new TextDecoder();
-let machineType, homeHeld = false;
+let machineType, homeHeld = false, heapHold = false;
 let panelDiagTimer = 0, panelDiagPending = false;
 // Actions that need the VM stopped (snapshots, SD card operations), FIFO.
 // Each one runs on the 'VM status: paused' line of its own 'info status'.
@@ -118,13 +118,17 @@ function monitorLine(line) {
         nextPause();
     }
 }
-function whilePaused(action) {
-    pauses.push(action);
+function whilePaused(action, heapSafe = false) {
+    pauses.push({action, heapSafe});
     if (!paused) nextPause();
 }
 function nextPause() {
-    paused = pauses.shift() || null;
-    if (paused) command('stop\ninfo status');
+    // While a Heap snapshot owns the stop, defer SD/save operations. Reads
+    // and heapEnd are marked heapSafe and may continue within that pause.
+    const index = heapHold ? pauses.findIndex(item => item.heapSafe) : 0;
+    if (index < 0) { paused = null; return; }
+    paused = pauses.splice(index, 1)[0].action;
+    command('stop\ninfo status');
 }
 function snapshot(action) {
     whilePaused(() => {
@@ -138,6 +142,53 @@ function snapshot(action) {
 function sdBytes() {
     const node = Module.FS.lookupPath('/sd.img').node;
     return node.contents.subarray(0, node.usedBytes);
+}
+function heapRead({id, addr, size}) {
+    if (!Number.isSafeInteger(id) || !Number.isInteger(addr) || addr < 0 || addr > 0xffffffff ||
+        !Number.isInteger(size) || size < 1 || size > 32 * 1024 * 1024 || addr + size > 0x100000000) {
+        send('heap-read-result', {id, ok: false, error: {code: 'EINVAL', message: 'Invalid guest-memory range.'}});
+        return;
+    }
+    whilePaused(() => {
+        const path = `/heap-read-${id}.bin`;
+        try { Module.FS.unlink(path); } catch {}
+        // HMP's pmemsave reads guest physical memory. A second paused action
+        // is the completion barrier: HMP processes pmemsave before info status.
+        pauses.unshift({heapSafe: true, action: () => {
+            try {
+                const bytes = Module.FS.readFile(path);
+                Module.FS.unlink(path);
+                parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
+            } catch (error) {
+                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${error.message}`}});
+            }
+            return heapHold ? undefined : 'cont';
+        }});
+        command(`pmemsave 0x${addr.toString(16)} ${size} ${path}\ninfo status`);
+    }, true);
+}
+function heapBegin({id}) {
+    if (heapHold) {
+        send('heap-control-result', {id, ok: false, error: {code: 'EBUSY', message: 'A Heap memory transaction is already active.'}});
+        return;
+    }
+    whilePaused(() => {
+        heapHold = true;
+        send('heap-control-result', {id, ok: true});
+        // Keep the VM stopped until heapEnd; subsequent reads share this pause.
+        return undefined;
+    });
+}
+function heapEnd({id}) {
+    if (!heapHold) {
+        send('heap-control-result', {id, ok: true});
+        return;
+    }
+    whilePaused(() => {
+        heapHold = false;
+        send('heap-control-result', {id, ok: true});
+        return 'cont';
+    }, true);
 }
 function sdOperation({id, op, args}) {
     whilePaused(() => {
@@ -215,6 +266,12 @@ window.addEventListener('message', async ({source, origin, data}) => {
         snapshot(data.type);
     } else if (data.type === 'sd') {
         sdOperation(data);
+    } else if (data.type === 'heap-read') {
+        heapRead(data);
+    } else if (data.type === 'heap-begin') {
+        heapBegin(data);
+    } else if (data.type === 'heap-end') {
+        heapEnd(data);
     } else if (data.type === 'boot') {
         newBoot();
         clearInterval(panelDiagTimer);
