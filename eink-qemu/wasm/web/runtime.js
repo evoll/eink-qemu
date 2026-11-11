@@ -174,7 +174,7 @@ function heapRead({id, addr, size}) {
         return;
     }
     whilePaused(() => {
-        const path = `heap-read-${id}.bin`; // HMP parses an unquoted leading slash as an expression.
+        const path = `/heap-read-${id}.bin`; // Use an absolute MEMFS path so QEMU and the browser read the same file.
         heapReadMonitorOutput = [];
         try { Module.FS.unlink(path); } catch {}
         // ESP-IDF heap pointers are CPU virtual addresses (e.g. 0x3fc88000).

@@ -120,7 +120,7 @@ test('empty pause queue is a no-op after the last paused action', () => {
 });
 
 
-test('heap reads quote a relative HMP filename and use virtual memsave', () => {
+test('heap reads quote an absolute MEMFS path and use virtual memsave', () => {
     const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
         '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine; globalThis.__testMonitorInput = monitorInput;';
     const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
@@ -133,7 +133,7 @@ test('heap reads quote a relative HMP filename and use virtual memsave', () => {
     // The pause acknowledgment executes the heap-read action and queues memsave.
     context.__testMonitorLine('VM status: paused');
     const commands = new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput));
-    assert.match(commands, /memsave 0x3fc88000 128 \"heap-read-42\.bin\"/);
+    assert.match(commands, /memsave 0x3fc88000 128 \"\/heap-read-42\.bin\"/);
     assert.doesNotMatch(commands, /pmemsave/);
 });
 
