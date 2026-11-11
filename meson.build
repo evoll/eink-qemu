@@ -2651,6 +2651,9 @@ config_host_data.set('CONFIG_POSIX_MEMALIGN', cc.has_function('posix_memalign', 
 config_host_data.set('CONFIG_ALIGNED_MALLOC', cc.has_function('_aligned_malloc'))
 config_host_data.set('CONFIG_VALLOC', cc.has_function('valloc'))
 config_host_data.set('CONFIG_MEMALIGN', cc.has_function('memalign'))
+# C11 aligned_alloc is available in Emscripten even when POSIX aligned
+# allocation APIs are not. It requires size to be a multiple of alignment.
+config_host_data.set('CONFIG_ALIGNED_ALLOC', cc.has_function('aligned_alloc', prefix: '#include <stdlib.h>'))
 config_host_data.set('CONFIG_PPOLL', cc.has_function('ppoll'))
 config_host_data.set('CONFIG_PREADV', cc.has_function('preadv', prefix: '#include <sys/uio.h>'))
 config_host_data.set('CONFIG_PTHREAD_FCHDIR_NP', cc.has_function('pthread_fchdir_np'))

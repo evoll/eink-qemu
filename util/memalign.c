@@ -61,6 +61,32 @@ void *qemu_try_memalign(size_t alignment, size_t size)
     ptr = valloc(size);
 #elif defined(CONFIG_MEMALIGN)
     ptr = memalign(alignment, size);
+#elif defined(__EMSCRIPTEN__)
+    /*
+     * Some Emscripten memory64 sysroots do not expose any of the
+     * platform aligned-allocation APIs detected by Meson.  Keep the
+     * fallback local to Emscripten: over-allocate with malloc(), align
+     * the returned address, and retain the original pointer immediately
+     * before it so qemu_vfree() can release the allocation safely.
+     */
+    void *base;
+    uintptr_t aligned;
+
+    if (alignment > SIZE_MAX - sizeof(void *) ||
+        size > SIZE_MAX - alignment - sizeof(void *)) {
+        errno = ENOMEM;
+        ptr = NULL;
+    } else {
+        base = malloc(size + alignment - 1 + sizeof(void *));
+        if (base == NULL) {
+            ptr = NULL;
+        } else {
+            aligned = ((uintptr_t)base + sizeof(void *) + alignment - 1) &
+                      ~((uintptr_t)alignment - 1);
+            ((void **)aligned)[-1] = base;
+            ptr = (void *)aligned;
+        }
+    }
 #else
     #error No function to allocate aligned memory available
 #endif
@@ -83,7 +109,15 @@ void *qemu_memalign(size_t alignment, size_t size)
 void qemu_vfree(void *ptr)
 {
     trace_qemu_vfree(ptr);
-#if !defined(CONFIG_POSIX_MEMALIGN) && defined(CONFIG_ALIGNED_MALLOC)
+#if defined(__EMSCRIPTEN__) && \
+    !defined(CONFIG_POSIX_MEMALIGN) && \
+    !defined(CONFIG_ALIGNED_MALLOC) && \
+    !defined(CONFIG_VALLOC) && \
+    !defined(CONFIG_MEMALIGN)
+    if (ptr) {
+        free(((void **)ptr)[-1]);
+    }
+#elif !defined(CONFIG_POSIX_MEMALIGN) && defined(CONFIG_ALIGNED_MALLOC)
     /* Only Windows _aligned_malloc needs a special free function */
     _aligned_free(ptr);
 #else
