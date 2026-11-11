@@ -31,7 +31,7 @@ GPIO7 respectively.
 
 The 1-bit SDMMC firmware pinout is CLK GPIO41, CMD GPIO42, DAT0 GPIO40;
 GPIO6 controls its power rail active-low. The shared I2C bus is SDA GPIO39 and
-SCL GPIO38 (firmware-configured at 400 kHz), with QMI8658 at `0x6A`, CW2017
+SCL GPIO38 (firmware-configured at 400 kHz), with QMI8658 at `0x6B`, CW2017
 at `0x63` and BM8563 at `0x51`. QMI8658 provides the motion sensor used for
 shake-based page turning. Charge status is GPIO21; the emulator holds this input low so the firmware exposes battery/charging status in the emulated UI. GPIO1 is the active-high power latch.
 GPIO4 is unused. The Classic has no touch controller or front light.
@@ -56,10 +56,12 @@ yet seed the factory NVS namespace or fully reproduce this selection
 algorithm. Automatic UC8279 variant/grayscale selection is not implemented.
 
 The firmware's CW2017 BATINFO/restart policy is not emulated as a dedicated
-board power policy. The QMI8658 model currently supplies the existing basic
-register-level sensor response; shake gesture fidelity still needs validation
-against the Classic firmware. These limitations are intentionally documented
-rather than approximated with incorrect GPIO levels or fabricated sensor
+board power policy. The QMI8658A model implements the identity/revision and
+basic control/status/data registers, range-scaled stationary samples, and
+host-injected lateral impulses. It does not model FIFO timing, DRDY interrupt
+pins, or the chip's on-device motion-detection engines; shake gesture fidelity
+still needs validation against the Classic firmware. These limitations are
+intentionally documented rather than approximated with fabricated sensor
 behavior.
 
 ## Benchmarking firmware

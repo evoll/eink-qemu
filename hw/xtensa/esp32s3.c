@@ -1296,7 +1296,7 @@ static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
     DeviceState *i2c0 = DEVICE(object_resolve_path_component(OBJECT(ss), "i2c0"));
     I2CBus *i2c = I2C_BUS(qdev_get_child_bus(i2c0, "i2c"));
     x4pro_add_i2c(i2c, "bm8563", 0x51);
-    x4pro_add_i2c(i2c, "qmi8658", 0x6a);
+    x4pro_add_i2c(i2c, "qmi8658", 0x6b);
     x4pro_add_i2c(i2c, "cw2017", 0x63);
 }
 

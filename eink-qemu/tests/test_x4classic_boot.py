@@ -112,7 +112,7 @@ class X4ClassicBoard(unittest.TestCase):
         self.write(base + 0x18, 3 << 12)
         self.write(base + 0x18, 0)
         self.write(base + 0x24, 0xffffffff)
-        for byte in (0x6a << 1, 0x00):
+        for byte in (0x6b << 1, 0x00):
             self.write(base + 0x1c, byte)
         for index, command in enumerate((6 << 11, (1 << 11) | (1 << 8) | 1, 2 << 11)):
             self.write(base + 0x58 + index * 4, command)
