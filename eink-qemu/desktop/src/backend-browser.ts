@@ -462,7 +462,9 @@ function endRun(exit: SessionInfo['exit']) {
   setSession({ state: 'idle', machine: null, exit });
 }
 function heapControl(type: 'heap-begin' | 'heap-end'): Promise<void> {
-  if (!frame || session.state !== 'running') return Promise.reject(new AppError('EIDLE', 'The emulator is not running.'));
+  if (!frame || (session.state !== 'running' && !(type === 'heap-end' && session.state === 'stopping'))) {
+    return Promise.reject(new AppError('EIDLE', 'The emulator is not running.'));
+  }
   const id = ++sequence;
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => {

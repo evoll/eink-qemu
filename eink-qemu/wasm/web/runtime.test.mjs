@@ -136,3 +136,27 @@ test('heap reads use virtual memsave rather than physical pmemsave', () => {
     assert.match(commands, /memsave 0x3fc88000 128 \/heap-read-42\.bin/);
     assert.doesNotMatch(commands, /pmemsave/);
 });
+
+test('a pending Stop is released after an active Heap transaction ends', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testHeapBegin = heapBegin; globalThis.__testHeapEnd = heapEnd; globalThis.__testSnapshot = snapshot; globalThis.__testMonitorLine = monitorLine;';
+    const sent = [], context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
+        parent: {location: {search: ''}, postMessage: message => sent.push(message)}, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    const fs = {lookupPath: () => ({node: {notifyListeners() {}}}), readFile: () => new Uint8Array([1, 2, 3]), unlink() {}};
+    context.Module = {FS: fs};
+    vm.runInContext(source, context);
+    context.__testHeapBegin({id: 1});
+    context.__testMonitorLine('VM status: paused');
+    context.__testSnapshot('stop');
+    context.__testHeapEnd({id: 2});
+    context.__testMonitorLine('VM status: paused');
+    context.__testMonitorLine('VM status: paused');
+    assert.ok(sent.some(message => message.type === 'heap-control-result' && message.id === 2 && message.ok));
+    assert.ok(sent.some(message => message.type === 'snapshot' && message.action === 'stop'));
+});
+
+test('browser backend permits heap-end while a Stop request is pending', () => {
+    const source = readFileSync(new URL('../../desktop/src/backend-browser.ts', import.meta.url), 'utf8');
+    assert.match(source, /type === 'heap-end' && session\.state === 'stopping'/);
+});

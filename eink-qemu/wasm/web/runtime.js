@@ -149,6 +149,16 @@ function sdBytes() {
     const node = Module.FS.lookupPath('/sd.img').node;
     return node.contents.subarray(0, node.usedBytes);
 }
+function describeFsError(error) {
+    if (error instanceof Error && error.message) return `${error.name}: ${error.message}`;
+    if (error && typeof error === 'object') {
+        const fields = ['name', 'message', 'code', 'errno', 'path'].filter(key => error[key] !== undefined)
+            .map(key => `${key}=${String(error[key])}`);
+        if (fields.length) return fields.join(', ');
+        try { return JSON.stringify(error); } catch {}
+    }
+    return String(error);
+}
 function heapRead({id, addr, size}) {
     if (!Number.isSafeInteger(id) || !Number.isInteger(addr) || addr < 0 || addr > 0xffffffff ||
         !Number.isInteger(size) || size < 1 || size > 32 * 1024 * 1024 || addr + size > 0x100000000) {
@@ -168,7 +178,8 @@ function heapRead({id, addr, size}) {
                 Module.FS.unlink(path);
                 parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
             } catch (error) {
-                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${error?.message ?? String(error)}`}});
+                try { Module.FS.unlink(path); } catch {}
+                send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest memory at 0x${addr.toString(16)}: ${describeFsError(error)}`}});
             }
             return heapHold ? undefined : 'cont';
         }});
