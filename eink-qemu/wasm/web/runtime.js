@@ -123,11 +123,17 @@ function whilePaused(action, heapSafe = false) {
     if (!paused) nextPause();
 }
 function nextPause() {
+    // An action commonly drains the queue. Do not splice index 0 from an
+    // empty queue: that returns undefined and used to throw while reading
+    // `.action`, aborting the browser runtime before firmware boot.
+    if (!pauses.length) { paused = null; return; }
     // While a Heap snapshot owns the stop, defer SD/save operations. Reads
     // and heapEnd are marked heapSafe and may continue within that pause.
     const index = heapHold ? pauses.findIndex(item => item.heapSafe) : 0;
     if (index < 0) { paused = null; return; }
-    paused = pauses.splice(index, 1)[0].action;
+    const next = pauses.splice(index, 1)[0];
+    if (!next || typeof next.action !== 'function') { paused = null; return; }
+    paused = next.action;
     command('stop\ninfo status');
 }
 function snapshot(action) {

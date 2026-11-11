@@ -107,3 +107,14 @@ test('heap memory requests reject invalid or oversized ranges before pausing QEM
         [7, false, 'EINVAL'], [8, false, 'EINVAL'],
     ]);
 });
+
+
+test('empty pause queue is a no-op after the last paused action', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testNextPause = nextPause;';
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, URLSearchParams,
+        parent: {location: {search: ''}, postMessage() {}}, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    vm.runInContext(source, context);
+    assert.doesNotThrow(() => context.__testNextPause());
+});
