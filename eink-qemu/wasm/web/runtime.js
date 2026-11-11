@@ -98,6 +98,15 @@ function turboProperties(machine, panel) {
     ];
     return properties.flatMap(property => ['-global', property]);
 }
+function consumeMonitorOutput(chunk) {
+    // QEMU's HMP character backend may emit CR-only line endings. Splitting
+    // only on LF can merge a complete memory dump with the following
+    // 'VM status: paused' response; monitorLine then discards the whole line.
+    monitorOutput += monitorDecoder.decode(chunk, {stream: true});
+    const lines = monitorOutput.split(/\r\n|\n|\r/);
+    monitorOutput = lines.pop();
+    lines.forEach(monitorLine);
+}
 function output(line) {
     if (line.startsWith('ESP-ROM:')) newBoot();
     send('log', {line});
@@ -205,7 +214,9 @@ function heapRead({id, addr, size}) {
             parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
         };
         const readWithXp = (offset, result) => {
-            const count = Math.min(4096, size - offset);
+            // Keep each HMP response small. Large xp dumps can exceed the
+            // browser character-device output buffer in WASM builds.
+            const count = Math.min(256, size - offset);
             const chunkAddress = addr + offset;
             heapReadMonitorOutput = [];
             pauses.unshift({heapSafe: true, action: () => {
@@ -318,10 +329,7 @@ function monitorDevice(FS) {
             return n;
         },
         write(stream, buffer, offset, length) {
-            monitorOutput += monitorDecoder.decode(buffer.slice(offset, offset + length), {stream: true});
-            const lines = monitorOutput.split('\n');
-            monitorOutput = lines.pop();
-            lines.forEach(monitorLine);
+            consumeMonitorOutput(buffer.slice(offset, offset + length));
             return length;
         },
         poll: () => (monitorInput.length ? POLLIN : 0) | POLLOUT

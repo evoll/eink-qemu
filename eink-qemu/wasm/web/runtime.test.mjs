@@ -218,3 +218,20 @@ test('missing pmemsave output triggers xp fallback and returns physical bytes', 
     assert.equal(result?.ok, true);
     assert.deepEqual(Array.from(result.bytes), [0, 1, 2, 3, 4, 5, 6, 255]);
 });
+
+
+test('HMP monitor output splits CR, LF and CRLF before processing pause acknowledgements', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testConsumeMonitorOutput = consumeMonitorOutput; globalThis.__testSetHeapOutput = value => heapReadMonitorOutput = value; globalThis.__testGetHeapOutput = () => heapReadMonitorOutput;';
+    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
+        parent: {location: {search: ''}, postMessage() {}}, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    vm.runInContext(source, context);
+    context.__testSetHeapOutput([]);
+    context.__testConsumeMonitorOutput(new TextEncoder().encode(
+        '000000003fc88000: 0x00 0x01 0x02 0x03\r000000003fc88004: 0x04 0x05 0x06 0x07\rVM status: paused\r'));
+    assert.deepEqual(Array.from(context.__testGetHeapOutput()), [
+        '000000003fc88000: 0x00 0x01 0x02 0x03',
+        '000000003fc88004: 0x04 0x05 0x06 0x07',
+    ]);
+});
