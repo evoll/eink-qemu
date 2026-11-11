@@ -171,7 +171,7 @@ function parsePhysicalDump(lines, addr, size) {
     const bytes = new Uint8Array(size);
     let cursor = 0;
     for (const line of lines) {
-        const match = line.match(/^\s*0x([0-9a-f]+):\s*(.*)$/i);
+        const match = line.match(/^\s*(?:0x)?([0-9a-f]+):\s*(.*)$/i);
         if (!match) continue;
         const lineAddress = Number.parseInt(match[1], 16);
         if (!Number.isSafeInteger(lineAddress) || lineAddress !== addr + cursor) continue;
@@ -224,7 +224,7 @@ function heapRead({id, addr, size}) {
             }});
             // xp reads guest physical memory directly and prints byte values to HMP.
             // Chunking bounds monitor output while keeping the VM stopped for the full snapshot.
-            command(`xp/${count}bx 0x${chunkAddress.toString(16)}\ninfo status`);
+            command(`xp /${count}bx 0x${chunkAddress.toString(16)}\ninfo status`);
         };
         pauses.unshift({heapSafe: true, action: () => {
             try {

@@ -184,8 +184,8 @@ test('physical-memory HMP dump parser validates addresses and exact byte count',
         document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
     vm.runInContext(source, context);
     const lines = [
-        '0x000000003fc88000: 0x00 0x01 0x02 0xff',
-        '0x000000003fc88004: 0x10 0x20 0x30 0x40',
+        '000000003fc88000: 0x00 0x01 0x02 0xff',
+        '000000003fc88004: 0x10 0x20 0x30 0x40',
     ];
     assert.deepEqual(Array.from(context.__testParsePhysicalDump(lines, 0x3fc88000, 8)), [0, 1, 2, 255, 16, 32, 48, 64]);
     assert.throws(() => context.__testParsePhysicalDump(lines.slice(0, 1), 0x3fc88000, 8), /returned 4 of 8 bytes/);
@@ -211,8 +211,8 @@ test('missing pmemsave output triggers xp fallback and returns physical bytes', 
     context.__testMonitorLine('VM status: paused');
     let commands = new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput));
     assert.match(commands, /pmemsave 0x3fc88000 8 \/heap-read-77\.bin/);
-    assert.match(commands, /xp\/8bx 0x3fc88000/);
-    context.__testMonitorLine('0x000000003fc88000: 0x00 0x01 0x02 0x03 0x04 0x05 0x06 0xff');
+    assert.match(commands, /xp \/8bx 0x3fc88000/);
+    context.__testMonitorLine('000000003fc88000: 0x00 0x01 0x02 0x03 0x04 0x05 0x06 0xff');
     context.__testMonitorLine('VM status: paused');
     const result = sent.find(message => message.type === 'heap-read-result');
     assert.equal(result?.ok, true);
