@@ -120,51 +120,51 @@ test('empty pause queue is a no-op after the last paused action', () => {
 });
 
 
-test('browser Heap reads use the direct QEMU physical-memory bridge', () => {
-    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
-        '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine;';
-    const sent = [];
-    const parent = {location: {search: ''}, postMessage: message => sent.push(message)};
-    const memory = new Uint8Array(256);
-    let freed = 0;
-    const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
-        parent, location: {origin: 'http://localhost'},
-        Module: {
-            FS: {lookupPath: () => ({node: {notifyListeners() {}}})},
-            HEAPU8: memory,
-            _malloc: size => size === 8 ? 32 : 0,
-            _free: () => { freed++; },
-            _qemu_browser_read_physical_memory: (addr, pointer, size) => {
-                assert.equal(addr, 0x3fc88000);
-                assert.equal(size, 8);
-                memory.set([0, 1, 2, 3, 4, 5, 6, 255], Number(pointer));
-                return 0;
-            },
-        },
-        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
-    vm.runInContext(source, context);
-    context.__testHeapRead({id: 42, addr: 0x3fc88000, size: 8});
-    context.__testMonitorLine('VM status: paused');
-    const result = sent.find(message => message.type === 'heap-read-result');
-    assert.equal(result?.ok, true);
-    assert.deepEqual(Array.from(result.bytes), [0, 1, 2, 3, 4, 5, 6, 255]);
-    assert.equal(freed, 1, 'temporary WASM buffer is released');
-});
-
-test('browser Heap reports a missing direct bridge instead of invoking HMP dump commands', () => {
+test('heap reads use the direct QEMU physical-memory bridge without HMP or host files', () => {
     const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
         '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine; globalThis.__testMonitorInput = monitorInput;';
-    const sent = [], parent = {location: {search: ''}, postMessage: message => sent.push(message)};
+    const sent = [], monitor = [];
+    const memory = new Uint8Array(256);
+    let freed = false, called = null;
     const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
-        parent, location: {origin: 'http://localhost'}, Module: {FS: {lookupPath: () => ({node: {notifyListeners() {}}})}},
+        parent: {location: {search: ''}, postMessage: message => sent.push(message)}, location: {origin: 'http://localhost'},
         document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    context.Module = {
+        FS: {lookupPath: () => ({node: {notifyListeners() {}}})},
+        HEAPU8: memory,
+        _malloc: size => size === 16 ? 32 : 0,
+        _free: pointer => { assert.equal(pointer, 32); freed = true; },
+        _qemu_browser_read_physical_memory: (addr, pointer, size) => {
+            called = [addr, pointer, size];
+            for (let i = 0; i < size; i++) memory[pointer + i] = (i + 1) & 0xff;
+            return 0;
+        },
+    };
+    vm.runInContext(source, context);
+    context.__testHeapRead({id: 42, addr: 0x3fc88000, size: 16});
+    context.__testMonitorLine('VM status: paused');
+    assert.deepEqual(called, [0x3fc88000, 32, 16]);
+    assert.equal(freed, true);
+    const result = sent.find(message => message.type === 'heap-read-result');
+    assert.equal(result.ok, true);
+    assert.deepEqual(Array.from(result.bytes), Array.from({length: 16}, (_, i) => i + 1));
+    const commands = new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput));
+    assert.doesNotMatch(commands, /pmemsave|\bxp \//);
+});
+
+test('heap read reports a missing direct bridge explicitly and does not use HMP fallback', () => {
+    const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
+        '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine;';
+    const sent = [], context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
+        parent: {location: {search: ''}, postMessage: message => sent.push(message)}, location: {origin: 'http://localhost'},
+        document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    context.Module = {FS: {lookupPath: () => ({node: {notifyListeners() {}}})}, _malloc() { return 8; }, _free() {}, HEAPU8: new Uint8Array(32)};
     vm.runInContext(source, context);
     context.__testHeapRead({id: 43, addr: 0x3fc88000, size: 8});
     context.__testMonitorLine('VM status: paused');
     const result = sent.find(message => message.type === 'heap-read-result');
-    assert.equal(result?.ok, false);
-    assert.match(result.error.message, /direct QEMU physical-memory bridge is missing/);
-    assert.doesNotMatch(new TextDecoder().decode(Uint8Array.from(context.__testMonitorInput)), /pmemsave|xp \/|memsave/);
+    assert.equal(result.ok, false);
+    assert.match(result.error.message, /direct QEMU physical-memory bridge is not exported/);
 });
 
 test('a pending Stop is released after an active Heap transaction ends', () => {
@@ -192,14 +192,32 @@ test('browser backend permits heap-end while a Stop request is pending', () => {
 });
 
 
-test('HMP monitor output splits CR, LF and CRLF before processing pause acknowledgements', () => {
+
+test('heap reads support BigInt pointers from native Memory64 builds', () => {
     const source = readFileSync(new URL('./runtime.js', import.meta.url), 'utf8') +
-        '\nglobalThis.__testConsumeMonitorOutput = consumeMonitorOutput; globalThis.__testGetMonitorOutput = () => monitorOutput;';
+        '\nglobalThis.__testHeapRead = heapRead; globalThis.__testMonitorLine = monitorLine;';
+    const sent = [], memory = new Uint8Array(128);
+    let passedPointer = null, freedPointer = null;
     const context = vm.createContext({window: {addEventListener() {}}, TextDecoder, TextEncoder, URLSearchParams,
-        parent: {location: {search: ''}, postMessage() {}}, location: {origin: 'http://localhost'},
+        parent: {location: {search: ''}, postMessage: message => sent.push(message)}, location: {origin: 'http://localhost'},
         document: {querySelector: () => ({}), addEventListener() {}, createElement: () => ({}), body: {append() {}}}});
+    context.Module = {
+        FS: {lookupPath: () => ({node: {notifyListeners() {}}})},
+        HEAPU8: memory,
+        _malloc: () => 16n,
+        _free: pointer => { freedPointer = pointer; },
+        _qemu_browser_read_physical_memory: (_addr, pointer, size) => {
+            passedPointer = pointer;
+            memory.set(new Uint8Array(size).fill(0x5a), Number(pointer));
+            return 0;
+        },
+    };
     vm.runInContext(source, context);
-    context.__testConsumeMonitorOutput(new TextEncoder().encode(
-        '000000003fc88000: 0x00 0x01 0x02 0x03\r000000003fc88004: 0x04 0x05 0x06 0x07\rVM status: paused\r'));
-    assert.equal(context.__testGetMonitorOutput(), '');
+    context.__testHeapRead({id: 44, addr: 0x3fc88000, size: 8});
+    context.__testMonitorLine('VM status: paused');
+    assert.equal(passedPointer, 16n);
+    assert.equal(freedPointer, 16n);
+    const result = sent.find(message => message.type === 'heap-read-result');
+    assert.equal(result.ok, true);
+    assert.deepEqual(Array.from(result.bytes), Array(8).fill(0x5a));
 });

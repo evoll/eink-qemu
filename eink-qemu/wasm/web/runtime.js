@@ -97,15 +97,6 @@ function turboProperties(machine, panel) {
     ];
     return properties.flatMap(property => ['-global', property]);
 }
-function consumeMonitorOutput(chunk) {
-    // QEMU's HMP character backend may emit CR-only line endings. Splitting
-    // only on LF can merge a complete memory dump with the following
-    // 'VM status: paused' response; monitorLine then discards the whole line.
-    monitorOutput += monitorDecoder.decode(chunk, {stream: true});
-    const lines = monitorOutput.split(/\r\n|\n|\r/);
-    monitorOutput = lines.pop();
-    lines.forEach(monitorLine);
-}
 function output(line) {
     if (line.startsWith('ESP-ROM:')) newBoot();
     send('log', {line});
@@ -158,16 +149,6 @@ function sdBytes() {
     const node = Module.FS.lookupPath('/sd.img').node;
     return node.contents.subarray(0, node.usedBytes);
 }
-function describeFsError(error) {
-    if (error instanceof Error && error.message) return `${error.name}: ${error.message}`;
-    if (error && typeof error === 'object') {
-        const fields = ['name', 'message', 'code', 'errno', 'path'].filter(key => error[key] !== undefined)
-            .map(key => `${key}=${String(error[key])}`);
-        if (fields.length) return fields.join(', ');
-        try { return JSON.stringify(error); } catch {}
-    }
-    return String(error);
-}
 function heapRead({id, addr, size}) {
     if (!Number.isSafeInteger(id) || !Number.isInteger(addr) || addr < 0 || addr > 0xffffffff ||
         !Number.isInteger(size) || size < 1 || size > 32 * 1024 * 1024 || addr + size > 0x100000000) {
@@ -175,27 +156,35 @@ function heapRead({id, addr, size}) {
         return;
     }
     whilePaused(() => {
-        let pointer;
+        const fail = detail => send('heap-read-result', {id, ok: false, error: {
+            code: 'EIO', message: `Cannot read guest physical memory at 0x${addr.toString(16)}: ${detail}`
+        }});
+        const complete = bytes => parent.postMessage(
+            {type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
+        let pointer = 0;
         try {
-            const readPhysical = Module._qemu_browser_read_physical_memory;
-            if (typeof readPhysical !== 'function' || typeof Module._malloc !== 'function' ||
-                typeof Module._free !== 'function' || !Module.HEAPU8) {
-                throw new Error('The direct QEMU physical-memory bridge is missing from this WASM build. Rebuild the browser emulator.');
+            // This direct bridge reads QEMU's AddressSpace while the VM is
+            // paused. It deliberately avoids pmemsave/xp and host-side files.
+            if (typeof Module._qemu_browser_read_physical_memory !== 'function') {
+                throw new Error('The direct QEMU physical-memory bridge is not exported by this WASM build.');
+            }
+            if (typeof Module._malloc !== 'function' || typeof Module._free !== 'function' ||
+                !Module.HEAPU8 || typeof Module.HEAPU8.slice !== 'function') {
+                throw new Error('The WASM heap buffer or allocation functions are not exported.');
             }
             pointer = Module._malloc(size);
-            if (!pointer) throw new Error(`Could not allocate ${size} bytes for the guest-memory read.`);
-            const status = readPhysical(addr, pointer, size);
-            if (status !== 0) throw new Error(`QEMU address_space_read failed (status ${status}) at 0x${addr.toString(16)} for ${size} bytes.`);
-            const offset = Number(pointer);
-            if (!Number.isSafeInteger(offset) || offset < 0 || offset + size > Module.HEAPU8.length) {
-                throw new Error('The WASM memory bridge returned an invalid buffer address.');
-            }
+            if (pointer === 0 || pointer === 0n) throw new Error(`WASM could not allocate ${size} bytes for the memory snapshot.`);
+            const offset = typeof pointer === 'bigint' ? Number(pointer) : pointer;
+            if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('WASM returned an invalid heap pointer.');
+            const status = Module._qemu_browser_read_physical_memory(addr, pointer, size);
+            if (status !== 0) throw new Error(`QEMU AddressSpace read failed with status ${status}.`);
             const bytes = Module.HEAPU8.slice(offset, offset + size);
-            parent.postMessage({type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
+            if (bytes.length !== size) throw new Error(`WASM returned ${bytes.length} of ${size} requested bytes.`);
+            complete(bytes);
         } catch (error) {
-            send('heap-read-result', {id, ok: false, error: {code: 'EIO', message: `Cannot read guest physical memory at 0x${addr.toString(16)}: ${describeFsError(error)}`}});
+            fail(error instanceof Error ? error.message : String(error));
         } finally {
-            if (pointer) Module._free(pointer);
+            if (pointer && typeof Module._free === 'function') Module._free(pointer);
         }
         return heapHold ? undefined : 'cont';
     }, true);
@@ -274,7 +263,10 @@ function monitorDevice(FS) {
             return n;
         },
         write(stream, buffer, offset, length) {
-            consumeMonitorOutput(buffer.slice(offset, offset + length));
+            monitorOutput += monitorDecoder.decode(buffer.slice(offset, offset + length), {stream: true});
+            const lines = monitorOutput.split('\n');
+            monitorOutput = lines.pop();
+            lines.forEach(monitorLine);
             return length;
         },
         poll: () => (monitorInput.length ? POLLIN : 0) | POLLOUT
