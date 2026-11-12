@@ -43,6 +43,7 @@
 #include "elf.h"
 #include "system/system.h"
 #include "system/physmem.h"
+#include "system/memory.h"
 #include "exec/watchpoint.h"
 
 #include "hw/ssi/esp32s3_spi.h"
@@ -1147,11 +1148,34 @@ static void esp32s3_machine_init(MachineState *machine)
             exit(1);
         }
         if (qemu_wasm_boot_diagnostics_enabled()) {
+            uint8_t rom_probe[8] = { 0 };
+            uint8_t reset_probe[8] = { 0 };
+            hwaddr rom_base = esp32s3_memmap[ESP32S3_MEMREGION_IROM].base;
+            hwaddr reset_pc = ss->cpu[0].env.pc;
+            MemTxResult rom_result;
+            MemTxResult reset_result;
+
+            rom_result = address_space_read(CPU(&ss->cpu[0])->as, rom_base,
+                                            MEMTXATTRS_UNSPECIFIED,
+                                            rom_probe, sizeof(rom_probe));
+            reset_result = address_space_read(CPU(&ss->cpu[0])->as, reset_pc,
+                                              MEMTXATTRS_UNSPECIFIED,
+                                              reset_probe, sizeof(reset_probe));
             fprintf(stderr,
-                    "WASM_ESP32S3_ROM loaded_bytes=%d base=0x%08" PRIx32
-                    " reset_pc=0x%08" PRIx32 " cpu_halted=%d\n",
-                    size, (uint32_t)esp32s3_memmap[ESP32S3_MEMREGION_IROM].base,
-                    (uint32_t)ss->cpu[0].env.pc, CPU(&ss->cpu[0])->halted);
+                    "WASM_ESP32S3_ROM loaded_bytes=%d map_base=0x%08" PRIx32
+                    " map_size=0x%08" PRIx32 " reset_pc=0x%08" PRIx32
+                    " core_reset0=0x%08" PRIx32
+                    " core_reset1=0x%08" PRIx32
+                    " cpu_halted=%d rom_tx=%d rom_bytes=%02x%02x%02x%02x"
+                    " reset_tx=%d reset_bytes=%02x%02x%02x%02x\n",
+                    size, (uint32_t)rom_base,
+                    (uint32_t)esp32s3_memmap[ESP32S3_MEMREGION_IROM].size,
+                    (uint32_t)reset_pc, (uint32_t)XCHAL_RESET_VECTOR0_VADDR,
+                    (uint32_t)XCHAL_RESET_VECTOR1_VADDR,
+                    CPU(&ss->cpu[0])->halted, rom_result, rom_probe[0],
+                    rom_probe[1], rom_probe[2],
+                    rom_probe[3], reset_result, reset_probe[0],
+                    reset_probe[1], reset_probe[2], reset_probe[3]);
             fflush(stderr);
         }
         g_free(rom_binary);

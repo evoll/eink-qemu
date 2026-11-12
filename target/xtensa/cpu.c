@@ -212,10 +212,15 @@ static void xtensa_cpu_reset_hold(Object *obj, ResetType type)
 #ifdef __EMSCRIPTEN__
     if (qemu_wasm_boot_diagnostics_enabled()) {
         fprintf(stderr,
-                "WASM_XTENSA_RESET cpu=%d pc=0x%08" PRIx32
-                " ps=0x%08" PRIx32 " runstall=%d halted=%d\n",
-                cs->cpu_index, (uint32_t)env->pc, env->sregs[PS],
-                env->runstall, cs->halted);
+                "WASM_XTENSA_RESET cpu=%d model=%s static_vectors=%u"
+                " reset0=0x%08" PRIx32 " reset1=0x%08" PRIx32
+                " pc=0x%08" PRIx32 " ps=0x%08" PRIx32
+                " runstall=%d halted=%d\n",
+                cs->cpu_index, env->config->name, env->static_vectors,
+                (uint32_t)env->config->exception_vector[EXC_RESET0],
+                (uint32_t)env->config->exception_vector[EXC_RESET1],
+                (uint32_t)env->pc, env->sregs[PS], env->runstall,
+                cs->halted);
         fflush(stderr);
     }
 #endif
