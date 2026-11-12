@@ -48,6 +48,15 @@ if [ "${TURBO:-0}" = 1 ]; then
     done < <(sh "$ROOT/eink-qemu/turbo-args.sh" "$machine")
 fi
 machine_args=$machine
+# Optional QEMU diagnostics for the blank-ROM smoke test. Keep the default
+# launcher quiet; smoke.sh supplies an evidence path only for --rom-only.
+diagnostics=()
+if [ "${WASM_BOOT_DIAGNOSTICS:-0}" = 1 ]; then
+    diagnostics=(-d cpu_reset,guest_errors,unimp)
+    if [ -n "${WASM_QEMU_LOG:-}" ]; then
+        diagnostics+=(-D "/host${WASM_QEMU_LOG}")
+    fi
+fi
 if [ "$machine" = x4pro ] && [ -n "${X4PANEL:-}" ]; then
     machine_args="$machine,panel=$X4PANEL"
 fi

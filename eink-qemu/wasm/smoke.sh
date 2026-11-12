@@ -105,9 +105,16 @@ def run(machine, flash, firmware=False):
         command = [os.environ.get('RUN_NODE', str(root / 'eink-qemu/wasm/run-node.sh')),
                    str(flash), str(evidence / 'sd.img')]
     start = time.monotonic()
+    process_env = {**os.environ, 'X4MACHINE': machine,
+                   'WASM_JIT_STATS': '1', 'TURBO': '1' if turbo else '0'}
+    if rom_only:
+        # Capture QEMU's own CPU-reset and guest-error diagnostics separately
+        # from the USB-CDC console log. This is intentionally limited to the
+        # blank-flash ROM diagnostic run.
+        process_env['WASM_BOOT_DIAGNOSTICS'] = '1'
+        process_env['WASM_QEMU_LOG'] = str(evidence / (machine + '-qemu.log'))
     p = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT, env={**os.environ, 'X4MACHINE': machine,
-                         'WASM_JIT_STATS': '1', 'TURBO': '1' if turbo else '0'})
+                         stderr=subprocess.STDOUT, env=process_env)
     sel = selectors.DefaultSelector()
     sel.register(p.stdout, selectors.EVENT_READ)
     output = bytearray()
