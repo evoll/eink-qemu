@@ -24,6 +24,9 @@
 /* Ported SDL 1.2 code to 2.0 by Dave Airlie. */
 
 #include "qemu/osdep.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include "qemu/module.h"
 #include "qemu/cutils.h"
 #include "ui/console.h"
@@ -941,9 +944,24 @@ static void sdl2_display_init(DisplayState *ds, DisplayOptions *o)
      * Skip the SDL backend before SDL_Init(); browser builds do not set this
      * environment variable and retain the normal SDL display path.
      */
+#ifdef __EMSCRIPTEN__
+    /*
+     * Emscripten's libc environment is not guaranteed to mirror Node's
+     * process.env.  Inspect the Node environment from the JS runtime instead
+     * of relying on g_getenv(), which can be empty even when run-node.sh
+     * exported QEMU_HEADLESS_NODE=1.  This keeps the browser SDL path intact.
+     */
+    if (EM_ASM_INT({
+            return (typeof process === 'object' && process !== null &&
+                    process.env && process.env.QEMU_HEADLESS_NODE === '1') ? 1 : 0;
+        })) {
+        return;
+    }
+#else
     if (g_getenv("QEMU_HEADLESS_NODE")) {
         return;
     }
+#endif
 
     if (SDL_GetHintBoolean("QEMU_ENABLE_SDL_LOGGING", SDL_FALSE)) {
         SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
