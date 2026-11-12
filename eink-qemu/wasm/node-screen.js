@@ -14,10 +14,49 @@ if (typeof globalThis.screen === 'undefined') {
     };
 }
 
-// SDL's Emscripten glue also probes the DOM Pointer Lock API during startup.
-// In headless Node there is no DOM; an empty body deliberately makes
-// Emscripten's pointer-lock helper take its documented unsupported path.
-// Do not provide requestPointerLock: headless smoke tests use -display none.
+// SDL's Emscripten glue performs a small number of DOM lookups even when
+// QEMU is launched with -display none. Node has no DOM, so provide a minimal
+// inert canvas/event target for those startup probes. It deliberately has no
+// requestPointerLock() or 2D/WebGL context: headless smoke tests must not
+// create an interactive display.
 if (typeof globalThis.document === 'undefined') {
-    globalThis.document = { body: {} };
+    const noop = () => {};
+    const canvas = {
+        width: globalThis.screen.width,
+        height: globalThis.screen.height,
+        style: {},
+        addEventListener: noop,
+        removeEventListener: noop,
+        getBoundingClientRect: () => ({
+            x: 0, y: 0, left: 0, top: 0,
+            right: globalThis.screen.width,
+            bottom: globalThis.screen.height,
+            width: globalThis.screen.width,
+            height: globalThis.screen.height,
+        }),
+        getContext: () => null,
+    };
+    const body = {
+        appendChild: noop,
+        removeChild: noop,
+        addEventListener: noop,
+        removeEventListener: noop,
+    };
+    globalThis.document = {
+        body,
+        documentElement: body,
+        querySelector(selector) {
+            return selector === 'canvas' || selector === '#canvas' ? canvas : null;
+        },
+        getElementById(id) {
+            return id === 'canvas' ? canvas : null;
+        },
+        createElement(tagName) {
+            return String(tagName).toLowerCase() === 'canvas' ? { ...canvas } : {
+                style: {}, addEventListener: noop, removeEventListener: noop,
+            };
+        },
+        addEventListener: noop,
+        removeEventListener: noop,
+    };
 }
