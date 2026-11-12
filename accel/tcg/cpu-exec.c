@@ -18,6 +18,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/wasm-boot-diagnostics.h"
 #include "qemu/qemu-print.h"
 #include "qapi/error.h"
 #include "qapi/type-helpers.h"
@@ -1030,13 +1031,32 @@ static int cpu_exec_setjmp(CPUState *cpu, SyncClocks *sc)
 
 int cpu_exec(CPUState *cpu)
 {
+    static unsigned int wasm_diag_exec_entries;
     int ret;
     SyncClocks sc = { 0 };
 
     /* replay_interrupt may need current_cpu */
     current_cpu = cpu;
 
+#ifdef __EMSCRIPTEN__
+    if (cpu->cpu_index == 0 && wasm_diag_exec_entries < 8 &&
+        qemu_wasm_boot_diagnostics_enabled()) {
+        wasm_diag_exec_entries++;
+        fprintf(stderr,
+                "WASM_CPU_EXEC entry=%u pc=0x%" PRIx64 " halted=%d\n",
+                wasm_diag_exec_entries, (uint64_t)cpu_get_pc(cpu), cpu->halted);
+        fflush(stderr);
+    }
+#endif
     if (cpu_handle_halt(cpu)) {
+#ifdef __EMSCRIPTEN__
+        if (cpu->cpu_index == 0 && wasm_diag_exec_entries <= 8 &&
+            qemu_wasm_boot_diagnostics_enabled()) {
+            fprintf(stderr, "WASM_CPU_EXEC halted pc=0x%" PRIx64 "\n",
+                    (uint64_t)cpu_get_pc(cpu));
+            fflush(stderr);
+        }
+#endif
         return EXCP_HALTED;
     }
 

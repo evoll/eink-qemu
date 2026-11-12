@@ -52,7 +52,7 @@ machine_args=$machine
 # launcher quiet; smoke.sh supplies an evidence path only for --rom-only.
 diagnostics=()
 if [ "${WASM_BOOT_DIAGNOSTICS:-0}" = 1 ]; then
-    diagnostics=(-d cpu_reset,guest_errors,unimp)
+    diagnostics=(-d cpu_reset,guest_errors,unimp,exec)
     if [ -n "${WASM_QEMU_LOG:-}" ]; then
         diagnostics+=(-D "/host${WASM_QEMU_LOG}")
     fi

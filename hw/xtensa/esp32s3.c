@@ -9,6 +9,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/wasm-boot-diagnostics.h"
 #include "qemu/log.h"
 #include "qemu/error-report.h"
 #include "qemu/units.h"
@@ -1144,6 +1145,14 @@ static void esp32s3_machine_init(MachineState *machine)
         if (size < 0) {
             error_report("Error: could not load ROM binary '%s'", rom_binary);
             exit(1);
+        }
+        if (qemu_wasm_boot_diagnostics_enabled()) {
+            fprintf(stderr,
+                    "WASM_ESP32S3_ROM loaded_bytes=%d base=0x%08" PRIx32
+                    " reset_pc=0x%08" PRIx32 " cpu_halted=%d\n",
+                    size, (uint32_t)esp32s3_memmap[ESP32S3_MEMREGION_IROM].base,
+                    (uint32_t)ss->cpu[0].env.pc, CPU(&ss->cpu[0])->halted);
+            fflush(stderr);
         }
         g_free(rom_binary);
 

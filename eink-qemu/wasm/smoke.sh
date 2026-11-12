@@ -48,7 +48,7 @@ else:
     for src, dest in zip(args, ('flash.bin', 'sd.img')):
         shutil.copyfile(src, evidence / dest)
 (evidence / 'blank.bin').write_bytes(bytes(16 * 1024 * 1024))
-timeout = float(os.environ.get('TIMEOUT', '600'))
+timeout = float(os.environ.get('TIMEOUT', '120' if rom_only else '600'))
 # CrossPoint X3 and X4 Pro draw Home by the third completed refresh.
 # The optional [HOME] thumbnail warning disappears once its cache exists.
 firmware_machine = None
@@ -211,7 +211,10 @@ def run(machine, flash, firmware=False):
                     return
                 if p.poll() is not None:
                     raise RuntimeError(f'Node exited {p.returncode}: {text[-2000:]}')
-            raise RuntimeError(f'{machine}: timed out after {timeout} s; see {log_path}')
+            tail = log_path.read_text(errors='replace')[-5000:] if log_path.exists() else '<no console output>'
+            raise RuntimeError(
+                f'{machine}: timed out after {timeout} s; see {log_path}\n'
+                f'--- last console output ---\n{tail}')
     finally:
         if p.poll() is None:
             p.kill()

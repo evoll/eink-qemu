@@ -29,6 +29,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/wasm-boot-diagnostics.h"
 #include "qapi/error.h"
 #include "exec/cpu-defs.h"
 #include "cpu.h"
@@ -207,6 +208,16 @@ static void xtensa_cpu_reset_hold(Object *obj, ResetType type)
 #ifndef CONFIG_USER_ONLY
     reset_mmu(env);
     cs->halted = env->runstall;
+#endif
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        fprintf(stderr,
+                "WASM_XTENSA_RESET cpu=%d pc=0x%08" PRIx32
+                " ps=0x%08" PRIx32 " runstall=%d halted=%d\n",
+                cs->cpu_index, (uint32_t)env->pc, env->sregs[PS],
+                env->runstall, cs->halted);
+        fflush(stderr);
+    }
 #endif
     /* For inf * 0 + NaN, return the input NaN */
     set_float_infzeronan_rule(float_infzeronan_dnan_never, &env->fp_status);
