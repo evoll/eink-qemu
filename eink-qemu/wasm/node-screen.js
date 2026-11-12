@@ -14,13 +14,27 @@ if (typeof globalThis.screen === 'undefined') {
     };
 }
 
-// SDL's Emscripten glue performs a small number of DOM lookups even when
-// QEMU is launched with -display none. Node has no DOM, so provide a minimal
-// inert canvas/event target for those startup probes. It deliberately has no
-// requestPointerLock() or 2D/WebGL context: headless smoke tests must not
-// create an interactive display.
+// SDL's Emscripten glue still initializes its 2D framebuffer path even when
+// QEMU is launched with -display none. Node has no DOM or Canvas API, so
+// provide an inert canvas and the tiny 2D-context surface SDL uses to allocate
+// and submit ImageData. Pixel writes are intentionally discarded: this shim
+// is loaded only by the headless Node smoke launcher, never by the browser.
 if (typeof globalThis.document === 'undefined') {
     const noop = () => {};
+    const context2d = {
+        createImageData(width, height) {
+            const w = Math.max(0, Number(width) | 0);
+            const h = Math.max(0, Number(height) | 0);
+            return { width: w, height: h, data: new Uint8ClampedArray(w * h * 4) };
+        },
+        putImageData: noop,
+        clearRect: noop,
+        fillRect: noop,
+        drawImage: noop,
+        save: noop,
+        restore: noop,
+        setTransform: noop,
+    };
     const canvas = {
         width: globalThis.screen.width,
         height: globalThis.screen.height,
@@ -34,7 +48,9 @@ if (typeof globalThis.document === 'undefined') {
             width: globalThis.screen.width,
             height: globalThis.screen.height,
         }),
-        getContext: () => null,
+        getContext(type) {
+            return type === '2d' ? context2d : null;
+        },
     };
     const body = {
         appendChild: noop,
