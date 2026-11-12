@@ -13,3 +13,11 @@ if (typeof globalThis.screen === 'undefined') {
         height: Number.isFinite(height) && height > 0 ? height : 600,
     };
 }
+
+// SDL's Emscripten glue also probes the DOM Pointer Lock API during startup.
+// In headless Node there is no DOM; an empty body deliberately makes
+// Emscripten's pointer-lock helper take its documented unsupported path.
+// Do not provide requestPointerLock: headless smoke tests use -display none.
+if (typeof globalThis.document === 'undefined') {
+    globalThis.document = { body: {} };
+}
