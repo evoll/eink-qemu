@@ -558,10 +558,23 @@ static void esp32s3_soc_init(Object *obj)
     qbus_init(&s->rtc_bus, sizeof(s->rtc_bus),
                         TYPE_SYSTEM_BUS, DEVICE(s), "esp32-rtc-bus");
 
+    /* Register the exact CPU model required by this SoC before instantiation. */
+    xtensa_esp32s3_register_core();
+
     for (int i = 0; i < ms->smp.cpus; ++i) {
         snprintf(name, sizeof(name), "cpu%d", i);
 
         object_initialize_child(obj, name, &s->cpu[i], TYPE_ESP32S3_CPU);
+#ifdef __EMSCRIPTEN__
+        if (qemu_wasm_boot_diagnostics_enabled()) {
+            fprintf(stderr,
+                    "WASM_ESP32S3_CPU_BIND cpu=%d requested=%s actual=%s model=%s\n",
+                    i, TYPE_ESP32S3_CPU,
+                    object_get_typename(OBJECT(&s->cpu[i])),
+                    s->cpu[i].env.config ? s->cpu[i].env.config->name : "(null)");
+            fflush(stderr);
+        }
+#endif
         // Allocate memory for TIE registers
         s->cpu[i].env.ext = qemu_memalign(16, sizeof(CPUXtensaEsp32s3State));
 

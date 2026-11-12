@@ -636,6 +636,7 @@ void xtensa_translate_code(CPUState *cs, TranslationBlock *tb,
 void **xtensa_get_regfile_by_name(const char *name, int entries, int bits);
 void xtensa_breakpoint_handler(CPUState *cs);
 void xtensa_register_core(XtensaConfigList *node);
+void xtensa_esp32s3_register_core(void);
 void xtensa_sim_open_console(Chardev *chr);
 void check_interrupts(CPUXtensaState *s);
 void xtensa_irq_init(CPUXtensaState *env);

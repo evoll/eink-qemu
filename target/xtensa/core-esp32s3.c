@@ -7,6 +7,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/wasm-boot-diagnostics.h"
 #include "cpu.h"
 #include "gdbstub/helpers.h"
 #include "qemu/host-utils.h"
@@ -40,3 +41,37 @@ static XtensaConfig xtensa_core_esp32s3 __attribute__((unused)) = {
 };
 
 REGISTER_CORE(xtensa_core_esp32s3)
+
+/*
+ * Ensure the ESP32-S3 CPU type exists before the SoC instantiates its CPUs.
+ * The normal REGISTER_CORE() path is a type_init hook.  Keep this idempotent
+ * fallback for machine initialization so that an omitted/late core type
+ * registration cannot silently resolve to a different Xtensa model.
+ */
+void xtensa_esp32s3_register_core(void)
+{
+    const char *type_name = XTENSA_CPU_TYPE_NAME("esp32s3");
+
+    if (object_class_by_name(type_name)) {
+        return;
+    }
+
+#if TARGET_BIG_ENDIAN
+    error_report("ESP32-S3 requires a little-endian Xtensa target; "
+                 "cannot register %s", type_name);
+    exit(1);
+#else
+    static XtensaConfigList node = {
+        .config = &xtensa_core_esp32s3,
+    };
+
+    xtensa_register_core(&node);
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        fprintf(stderr, "WASM_XTENSA_CORE_REGISTER name=%s qom_type=%s\n",
+                xtensa_core_esp32s3.name, type_name);
+        fflush(stderr);
+    }
+#endif
+#endif
+}
