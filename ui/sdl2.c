@@ -933,6 +933,18 @@ static void sdl2_display_init(DisplayState *ds, DisplayOptions *o)
 
     assert(o->type == DISPLAY_TYPE_SDL);
 
+    /*
+     * The Node smoke runner is headless.  Emscripten's SDL2 JavaScript glue
+     * still creates a browser canvas and framebuffer during SDL_Init(), even
+     * when QEMU was started with -display none.  Node has no real Canvas
+     * implementation, and the smoke test does not need an SDL display.
+     * Skip the SDL backend before SDL_Init(); browser builds do not set this
+     * environment variable and retain the normal SDL display path.
+     */
+    if (g_getenv("QEMU_HEADLESS_NODE")) {
+        return;
+    }
+
     if (SDL_GetHintBoolean("QEMU_ENABLE_SDL_LOGGING", SDL_FALSE)) {
         SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
     }

@@ -54,6 +54,9 @@ fi
 # Emscripten's SDL glue expects the browser Screen API even for -display none.
 # Preload a minimal Node-only shim for headless smoke tests; this is not used by
 # the browser build or the desktop application.
+# Tell the QEMU SDL backend to skip SDL_Init() in this headless Node process.
+# The browser runtime does not set this variable and keeps the SDL display.
+export QEMU_HEADLESS_NODE=1
 exec "${NODE:-node}" --require "$ROOT/eink-qemu/wasm/node-screen.js" \
     "${WASM_BUILD_DIR:-$build}/qemu-system-$arch.js" \
     -L "/host$ROOT/pc-bios" \
