@@ -1031,7 +1031,9 @@ static int cpu_exec_setjmp(CPUState *cpu, SyncClocks *sc)
 
 int cpu_exec(CPUState *cpu)
 {
+#ifdef __EMSCRIPTEN__
     static unsigned int wasm_diag_exec_entries;
+#endif
     int ret;
     SyncClocks sc = { 0 };
 
@@ -1044,7 +1046,7 @@ int cpu_exec(CPUState *cpu)
         wasm_diag_exec_entries++;
         fprintf(stderr,
                 "WASM_CPU_EXEC entry=%u pc=0x%" PRIx64 " halted=%d\n",
-                wasm_diag_exec_entries, (uint64_t)cpu_get_pc(cpu), cpu->halted);
+                wasm_diag_exec_entries, (uint64_t)cpu->cc->get_pc(cpu), cpu->halted);
         fflush(stderr);
     }
 #endif
@@ -1053,7 +1055,7 @@ int cpu_exec(CPUState *cpu)
         if (cpu->cpu_index == 0 && wasm_diag_exec_entries <= 8 &&
             qemu_wasm_boot_diagnostics_enabled()) {
             fprintf(stderr, "WASM_CPU_EXEC halted pc=0x%" PRIx64 "\n",
-                    (uint64_t)cpu_get_pc(cpu));
+                    (uint64_t)cpu->cc->get_pc(cpu));
             fflush(stderr);
         }
 #endif
