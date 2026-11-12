@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-eink-qemu emulates **ESP32-based e-ink readers** so you can run and debug their
+Eink-qemu emulates **ESP32-based e-ink readers** so you can run and debug their
 firmware without the device. It runs **unmodified firmware**: the stock
 firmware, CrossPoint, CrossInk, CrossDink, TRMNL, or your own ESP-IDF or
 Arduino app. The screen, SD card, keys, touch, clock, battery gauge and Wi-Fi
