@@ -7,6 +7,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/error-report.h"
 #include "qemu/wasm-boot-diagnostics.h"
 #include "cpu.h"
 #include "gdbstub/helpers.h"
