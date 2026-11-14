@@ -30,6 +30,15 @@ def inspect(path: Path) -> int:
         if index >= 0:
             excerpt = re.sub(r"\s+", " ", source[max(0, index - 180):index + 260])
             print(f"WASM_MAIN_ARGV_CONTEXT token={token} text={excerpt[:440]}")
+    # A zero-argument Emscripten entry point silently starts QEMU with the
+    # default machine. Treat this as a build failure rather than allowing a
+    # misleading ROM smoke timeout later.
+    if matches["main_reads_params_zero"] and not matches["main_reads_params_forwarded"]:
+        print(f"WASM_MAIN_ARGV_ERROR {path.name}: generated startup drops argc/argv", file=sys.stderr)
+        return 1
+    if not matches["main_reads_params_forwarded"]:
+        print(f"WASM_MAIN_ARGV_ERROR {path.name}: argument-forwarding branch not found", file=sys.stderr)
+        return 1
     return 0
 
 
