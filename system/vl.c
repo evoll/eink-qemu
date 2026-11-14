@@ -1686,6 +1686,20 @@ static MachineClass *select_machine(QDict *qdict, Error **errp)
     g_autoptr(GSList) machines = object_class_get_list(target_machine_typename(),
                                                        false);
     MachineClass *machine_class = NULL;
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        GSList *it;
+        fprintf(stderr, "WASM_MACHINE_LOOKUP requested=%s target_type=%s\n",
+                machine_type ? machine_type : "(null)",
+                target_machine_typename());
+        for (it = machines; it; it = it->next) {
+            ObjectClass *oc = OBJECT_CLASS(it->data);
+            fprintf(stderr, "WASM_MACHINE_REGISTERED type=%s\n",
+                    object_class_get_name(oc));
+        }
+        fflush(stderr);
+    }
+#endif
 
     if (machine_type) {
         machine_class = find_machine(machine_type, machines);
@@ -2888,6 +2902,19 @@ void qmp_x_exit_preconfig(Error **errp)
 
 void qemu_init(int argc, char **argv)
 {
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        int i;
+
+        fprintf(stderr, "WASM_QEMU_ARGV_BEGIN argc=%d\n", argc);
+        for (i = 0; i < argc; i++) {
+            fprintf(stderr, "WASM_QEMU_ARGV index=%d value=%s\n", i,
+                    argv[i] ? argv[i] : "(null)");
+        }
+        fprintf(stderr, "WASM_QEMU_ARGV_END\n");
+        fflush(stderr);
+    }
+#endif
     QemuOpts *icount_opts = NULL, *accel_opts = NULL;
     QemuOptsList *olist;
     int optind;
@@ -3455,6 +3482,16 @@ void qemu_init(int argc, char **argv)
                     bool help;
 
                     keyval_parse_into(machine_opts_dict, optarg, "type", &help, &error_fatal);
+#ifdef __EMSCRIPTEN__
+                    if (qemu_wasm_boot_diagnostics_enabled()) {
+                        fprintf(stderr,
+                                "WASM_MACHINE_OPTION raw=%s parsed_type=%s\n",
+                                optarg ? optarg : "(null)",
+                                qdict_get_try_str(machine_opts_dict, "type") ?
+                                qdict_get_try_str(machine_opts_dict, "type") : "(null)");
+                        fflush(stderr);
+                    }
+#endif
                     if (help) {
                         machine_help_func(machine_opts_dict);
                         exit(EXIT_SUCCESS);
@@ -3813,6 +3850,14 @@ void qemu_init(int argc, char **argv)
     /* Transfer QemuOpts options into machine options */
     parse_memory_options();
 
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        const char *requested = qdict_get_try_str(machine_opts_dict, "type");
+        fprintf(stderr, "WASM_MACHINE_OPTIONS_FINAL type=%s\n",
+                requested ? requested : "(null)");
+        fflush(stderr);
+    }
+#endif
     qemu_create_machine(machine_opts_dict);
 
     /*
