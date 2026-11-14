@@ -51,10 +51,6 @@ LINK_FLAGS+=" -sMAXIMUM_MEMORY=2147483648"
 LINK_FLAGS+=" -sSTACK_SIZE=8388608 -sASYNCIFY_STACK_SIZE=1048576"
 LINK_FLAGS+=" -sEXIT_RUNTIME=1 -sEXPORT_ES6=0 -sENVIRONMENT=web,worker,node -sASYNCIFY_IMPORTS=ffi_call_js"
 LINK_FLAGS+=" -sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction,TTY,FS,HEAPU8"
-# QEMU's system/main.c requires argc/argv.  Keep Emscripten's generated
-# entry-point wrapper parameter-aware so Node CLI arguments and browser
-# Module.arguments reach qemu_init() instead of being replaced by argc=0.
-LINK_FLAGS+=" -sMAIN_READS_PARAMS=1"
 # The browser Heap inspector reads guest RAM through this QEMU bridge.
 # Keep the allocator exports explicit; the bridge itself is also marked KEEPALIVE.
 LINK_FLAGS+=" -sEXPORTED_FUNCTIONS=['_malloc','_free','_qemu_browser_read_physical_memory']"
