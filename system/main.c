@@ -30,10 +30,15 @@
 
 #ifdef CONFIG_SDL
 /*
- * SDL insists on wrapping the main() function with its own implementation on
- * some platforms; it does so via a macro that renames our main function, so
- * <SDL.h> must be #included here even with no SDL code called from this file.
+ * QEMU owns its process entry point and must receive the command-line
+ * arguments supplied by Emscripten.  SDL's Emscripten main wrapper is
+ * optional; do not let SDL rename QEMU's main() to SDL_main(), otherwise
+ * Emscripten may select SDL's zero-argument startup stub as its entry point.
+ * SDL_SetMainReady() is called immediately before SDL_Init() in ui/sdl2.c.
  */
+#ifdef __EMSCRIPTEN__
+#define SDL_MAIN_HANDLED
+#endif
 #include <SDL.h>
 #endif
 

@@ -967,6 +967,11 @@ static void sdl2_display_init(DisplayState *ds, DisplayOptions *o)
         SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
     }
 
+#ifdef __EMSCRIPTEN__
+    /* QEMU provides its own main(); SDL's optional Emscripten main wrapper
+     * was disabled in system/main.c so mark SDL's startup as ready here. */
+    SDL_SetMainReady();
+#endif
     if (SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "Could not initialize SDL(%s) - exiting\n",
                 SDL_GetError());
