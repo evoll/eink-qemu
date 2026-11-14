@@ -1,5 +1,13 @@
 'use strict';
 
+// Capture the arguments Node received before Emscripten initializes. This is
+// enabled only for the ROM boot diagnostics and does not alter process.argv.
+if (process.env.WASM_BOOT_DIAGNOSTICS === '1') {
+    process.stderr.write(
+        'WASM_NODE_ARGV ' + JSON.stringify(process.argv.slice(2)) + '\n'
+    );
+}
+
 // Emscripten's SDL screen-size helper reads the browser global `screen` even
 // when QEMU is launched headlessly under Node (for example by wasm/smoke.sh).
 // Node does not provide that Web API, so supply the minimal Screen dimensions

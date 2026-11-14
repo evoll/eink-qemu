@@ -80,6 +80,11 @@ if grep -q '^#define CONFIG_TCG_INTERPRETER 1' config-host.h; then
     exit 1
 fi
 ninja -j"$JOBS" qemu-system-riscv32.js qemu-system-xtensa.js
+# Report how the generated Emscripten entry point constructs argc/argv.
+# MAIN_READS_PARAMS is an internal, metadata-derived setting; do not override it.
+python3 "$ROOT/eink-qemu/wasm/check-main-argv.py" \
+    "$BUILD/qemu-system-xtensa.js" \
+    "$BUILD/qemu-system-riscv32.js"
 
 if [ "$WEB" = 1 ]; then
     WASM_BUILD_DIR="$BUILD" "$ROOT/eink-qemu/wasm/package-web.sh"
