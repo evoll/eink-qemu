@@ -50,6 +50,7 @@
 #include "system/xen.h"
 
 #include "qemu/error-report.h"
+#include "qemu/wasm-boot-diagnostics.h"
 #include "qemu/sockets.h"
 #include "qemu/accel.h"
 #include "qemu/async-teardown.h"
@@ -2205,8 +2206,7 @@ static void qemu_create_machine_containers(Object *machine)
 static void qemu_create_machine(QDict *qdict)
 {
     MachineClass *machine_class = select_machine(qdict, &error_fatal);
-    bool wasm_machine_trace = getenv("WASM_BOOT_DIAGNOSTICS") &&
-                              !strcmp(getenv("WASM_BOOT_DIAGNOSTICS"), "1");
+    bool wasm_machine_trace = qemu_wasm_boot_diagnostics_enabled();
 
     if (wasm_machine_trace) {
         fprintf(stderr,
@@ -2214,6 +2214,7 @@ static void qemu_create_machine(QDict *qdict)
                 object_class_get_name(OBJECT_CLASS(machine_class)),
                 machine_class->default_cpu_type ? machine_class->default_cpu_type : "(null)",
                 machine_class->init ? "present" : "null");
+        fflush(stderr);
     }
     object_set_machine_compat_props(machine_class->compat_props);
 
@@ -2221,6 +2222,7 @@ static void qemu_create_machine(QDict *qdict)
     if (wasm_machine_trace) {
         fprintf(stderr, "WASM_MACHINE_OBJECT type=%s\n",
                 object_get_typename(OBJECT(current_machine)));
+        fflush(stderr);
     }
     object_property_add_child(object_get_root(), "machine",
                               OBJECT(current_machine));
@@ -2738,7 +2740,26 @@ static void qemu_init_board(void)
     qemu_plugin_load_list(&plugin_list, &error_fatal);
 
     /* From here on we enter MACHINE_PHASE_INITIALIZED.  */
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        MachineClass *mc = MACHINE_GET_CLASS(current_machine);
+        fprintf(stderr,
+                "WASM_MACHINE_INIT_CALL class=%s object=%s cpu_type=%s callback=%s\n",
+                object_class_get_name(OBJECT_CLASS(mc)),
+                object_get_typename(OBJECT(current_machine)),
+                current_machine->cpu_type ? current_machine->cpu_type : "(null)",
+                mc->init ? "present" : "null");
+        fflush(stderr);
+    }
+#endif
     machine_run_board_init(current_machine, mem_path, &error_fatal);
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        fprintf(stderr, "WASM_MACHINE_INIT_RETURN object=%s\n",
+                object_get_typename(OBJECT(current_machine)));
+        fflush(stderr);
+    }
+#endif
 
     if (machine_class->auto_create_sdcard) {
         bool ambigous;
@@ -3857,6 +3878,17 @@ void qemu_init(int argc, char **argv)
 
     /* parse features once if machine provides default cpu_type */
     current_machine->cpu_type = machine_default_cpu_type(current_machine);
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        MachineClass *mc = MACHINE_GET_CLASS(current_machine);
+        fprintf(stderr,
+                "WASM_MACHINE_CPU_TYPE class=%s default=%s selected=%s\n",
+                object_class_get_name(OBJECT_CLASS(mc)),
+                mc->default_cpu_type ? mc->default_cpu_type : "(null)",
+                current_machine->cpu_type ? current_machine->cpu_type : "(null)");
+        fflush(stderr);
+    }
+#endif
     if (cpu_option) {
         current_machine->cpu_type = parse_cpu_option(cpu_option);
     }
