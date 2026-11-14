@@ -51,8 +51,24 @@ REGISTER_CORE(xtensa_core_esp32s3)
 void xtensa_esp32s3_register_core(void)
 {
     const char *type_name = XTENSA_CPU_TYPE_NAME("esp32s3");
+    ObjectClass *oc = object_class_by_name(type_name);
 
-    if (object_class_by_name(type_name)) {
+    if (oc) {
+        XtensaCPUClass *xcc = XTENSA_CPU_CLASS(oc);
+        if (!xcc->config || strcmp(xcc->config->name, "esp32s3") != 0) {
+            error_report("Xtensa CPU type '%s' is bound to '%s', expected 'esp32s3'",
+                         type_name,
+                         xcc->config ? xcc->config->name : "(null)");
+            exit(1);
+        }
+#ifdef __EMSCRIPTEN__
+        if (qemu_wasm_boot_diagnostics_enabled()) {
+            fprintf(stderr,
+                    "WASM_XTENSA_CORE_REGISTER status=already-registered type=%s config=%s\n",
+                    type_name, xcc->config->name);
+            fflush(stderr);
+        }
+#endif
         return;
     }
 
@@ -68,7 +84,7 @@ void xtensa_esp32s3_register_core(void)
     xtensa_register_core(&node);
 #ifdef __EMSCRIPTEN__
     if (qemu_wasm_boot_diagnostics_enabled()) {
-        fprintf(stderr, "WASM_XTENSA_CORE_REGISTER name=%s qom_type=%s\n",
+        fprintf(stderr, "WASM_XTENSA_CORE_REGISTER status=registered name=%s qom_type=%s\n",
                 xtensa_core_esp32s3.name, type_name);
         fflush(stderr);
     }

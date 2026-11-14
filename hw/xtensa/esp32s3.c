@@ -551,27 +551,62 @@ static void esp32s3_soc_init(Object *obj)
 {
     Esp32s3SocState *s = ESP32S3_SOC(obj);
     MachineState *ms = MACHINE(qdev_get_machine());
+    const char *cpu_type = ms->cpu_type ? ms->cpu_type : TYPE_ESP32S3_CPU;
+    ObjectClass *cpu_oc;
     char name[16];
+
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        fprintf(stderr,
+                "WASM_ESP32S3_SOC_INIT soc=%s machine=%s cpu_type=%s smp_cpus=%u expected_cpu=%s\n",
+                object_get_typename(obj),
+                object_get_typename(OBJECT(ms)), cpu_type, ms->smp.cpus,
+                TYPE_ESP32S3_CPU);
+        fflush(stderr);
+    }
+#endif
 
     qbus_init(&s->periph_bus, sizeof(s->periph_bus),
                         TYPE_SYSTEM_BUS, DEVICE(s), "esp32-periph-bus");
     qbus_init(&s->rtc_bus, sizeof(s->rtc_bus),
                         TYPE_SYSTEM_BUS, DEVICE(s), "esp32-rtc-bus");
 
-    /* Register the exact CPU model required by this SoC before instantiation. */
+    /* Register and validate the exact CPU model required by this SoC. */
     xtensa_esp32s3_register_core();
+    cpu_oc = object_class_by_name(cpu_type);
+    if (!cpu_oc || !object_class_dynamic_cast(cpu_oc, TYPE_XTENSA_CPU)) {
+        error_report("ESP32-S3 machine requires an Xtensa CPU type; got '%s'",
+                     cpu_type);
+        exit(1);
+    }
+    if (strcmp(cpu_type, TYPE_ESP32S3_CPU) != 0) {
+        error_report("ESP32-S3 machine requires CPU '%s', got '%s'",
+                     TYPE_ESP32S3_CPU, cpu_type);
+        exit(1);
+    }
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        XtensaCPUClass *xcc = XTENSA_CPU_CLASS(cpu_oc);
+        fprintf(stderr,
+                "WASM_ESP32S3_CPU_CLASS type=%s config=%s smp_cpus=%u\n",
+                object_class_get_name(cpu_oc),
+                xcc->config ? xcc->config->name : "(null)", ms->smp.cpus);
+        fflush(stderr);
+    }
+#endif
 
     for (int i = 0; i < ms->smp.cpus; ++i) {
         snprintf(name, sizeof(name), "cpu%d", i);
 
-        object_initialize_child(obj, name, &s->cpu[i], TYPE_ESP32S3_CPU);
+        object_initialize_child(obj, name, &s->cpu[i], cpu_type);
 #ifdef __EMSCRIPTEN__
         if (qemu_wasm_boot_diagnostics_enabled()) {
+            XtensaCPUClass *xcc = XTENSA_CPU_GET_CLASS(&s->cpu[i]);
             fprintf(stderr,
                     "WASM_ESP32S3_CPU_BIND cpu=%d requested=%s actual=%s model=%s\n",
-                    i, TYPE_ESP32S3_CPU,
+                    i, cpu_type,
                     object_get_typename(OBJECT(&s->cpu[i])),
-                    s->cpu[i].env.config ? s->cpu[i].env.config->name : "(null)");
+                    xcc->config ? xcc->config->name : "(null)");
             fflush(stderr);
         }
 #endif
@@ -672,6 +707,16 @@ static ram_addr_t esp32s3_fixup_ram_size(ram_addr_t requested_size);
 
 static void esp32s3_machine_init(MachineState *machine)
 {
+#ifdef __EMSCRIPTEN__
+    if (qemu_wasm_boot_diagnostics_enabled()) {
+        fprintf(stderr,
+                "WASM_ESP32S3_MACHINE_INIT machine=%s cpu_type=%s smp_cpus=%u\n",
+                object_get_typename(OBJECT(machine)),
+                machine->cpu_type ? machine->cpu_type : "(null)",
+                machine->smp.cpus);
+        fflush(stderr);
+    }
+#endif
     machine->ram_size = esp32s3_fixup_ram_size(machine->ram_size);
     DriveInfo *dinfo = drive_get(IF_MTD, 0, 0);
     BlockBackend* blk = NULL;
@@ -1544,9 +1589,15 @@ static const TypeInfo x4pro_info = {
 /* Initialize machine type */
 static void esp32s3_machine_class_init(ObjectClass *oc, const void *data)
 {
+    static const char * const esp32s3_valid_cpu_types[] = {
+        TYPE_ESP32S3_CPU,
+        NULL,
+    };
     MachineClass *mc = MACHINE_CLASS(oc);
     mc->desc = "Espressif ESP32S3 machine";
     mc->init = esp32s3_machine_init;
+    mc->default_cpu_type = TYPE_ESP32S3_CPU;
+    mc->valid_cpu_types = esp32s3_valid_cpu_types;
     mc->max_cpus = 2;
     mc->default_cpus = 2;
     mc->default_ram_size = 0;
