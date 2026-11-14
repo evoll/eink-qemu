@@ -2205,9 +2205,23 @@ static void qemu_create_machine_containers(Object *machine)
 static void qemu_create_machine(QDict *qdict)
 {
     MachineClass *machine_class = select_machine(qdict, &error_fatal);
+    bool wasm_machine_trace = getenv("WASM_BOOT_DIAGNOSTICS") &&
+                              !strcmp(getenv("WASM_BOOT_DIAGNOSTICS"), "1");
+
+    if (wasm_machine_trace) {
+        fprintf(stderr,
+                "WASM_MACHINE_SELECTED class=%s default_cpu_type=%s init=%s\n",
+                object_class_get_name(OBJECT_CLASS(machine_class)),
+                machine_class->default_cpu_type ? machine_class->default_cpu_type : "(null)",
+                machine_class->init ? "present" : "null");
+    }
     object_set_machine_compat_props(machine_class->compat_props);
 
     current_machine = MACHINE(object_new_with_class(OBJECT_CLASS(machine_class)));
+    if (wasm_machine_trace) {
+        fprintf(stderr, "WASM_MACHINE_OBJECT type=%s\n",
+                object_get_typename(OBJECT(current_machine)));
+    }
     object_property_add_child(object_get_root(), "machine",
                               OBJECT(current_machine));
     qemu_create_machine_containers(OBJECT(current_machine));

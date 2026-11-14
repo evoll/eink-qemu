@@ -66,11 +66,22 @@ fi
 # Tell the QEMU SDL backend to skip SDL_Init() in this headless Node process.
 # The browser runtime does not set this variable and keeps the SDL display.
 export QEMU_HEADLESS_NODE=1
+qemu_js="${WASM_BUILD_DIR:-$build}/qemu-system-$arch.js"
 if [ "${WASM_BOOT_DIAGNOSTICS:-0}" = 1 ]; then
     printf 'WASM_BOOT_DIAGNOSTICS=1; QEMU debug flags: %s\n' "${diagnostics[*]}" >&2
+    printf 'WASM_LAUNCH requested_machine=%s arch=%s build_dir=%s executable=%s\n' \
+        "$machine" "$arch" "$(dirname "$qemu_js")" "$qemu_js" >&2
+    if [ ! -s "$qemu_js" ]; then
+        printf 'WASM_LAUNCH_ERROR missing_or_empty_executable=%s\n' "$qemu_js" >&2
+        exit 1
+    fi
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf 'WASM_LAUNCH_SHA256 '
+        sha256sum "$qemu_js" >&2
+    fi
 fi
 exec "${NODE:-node}" --require "$ROOT/eink-qemu/wasm/node-screen.js" \
-    "${WASM_BUILD_DIR:-$build}/qemu-system-$arch.js" \
+    "$qemu_js" \
     "${diagnostics[@]}" \
     -L "/host$ROOT/pc-bios" \
     -accel "${WASM_ACCEL:-$accel}" \
