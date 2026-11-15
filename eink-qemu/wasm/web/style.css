@@ -279,13 +279,18 @@ a.icon-button:hover { background: var(--surface-2); color: var(--text); }
 #keys[data-machine="x4pro"] button:is(:nth-child(2), :nth-child(4)) { margin-left: 12px; }
 
 /* Keep the desktop geometry identical for every device profile. The SD
-   browser is slightly wider, the device stage has a stable 620px track, and
-   the console receives the remaining width. This avoids profile-dependent
-   shifts caused by different physical-key rows or intrinsic device widths.
-   Narrow windows and phones retain the fluid/stacked layout. */
-@media (min-width: 1241px) {
+   browser and console retain their panel sizing rules while the device stage
+   takes the available middle space. This avoids profile-dependent shifts
+   caused by different physical-key rows or intrinsic device widths. */
+@media (min-width: 961px) {
   .app {
-    grid-template-columns: minmax(var(--sd-min), var(--sd-max)) 620px minmax(var(--output-min), 1fr);
+    /* Keep the stage fluid in Tauri windows instead of imposing the Web
+       reference width as a hard minimum. The panel script reduces SD/output
+       widths first; the stage then occupies the remaining space. */
+    grid-template-columns:
+      minmax(var(--sd-min), var(--sd-max))
+      minmax(360px, 1.2fr)
+      minmax(var(--output-min), 1fr);
   }
 }
 
