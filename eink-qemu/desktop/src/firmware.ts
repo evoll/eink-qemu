@@ -8,11 +8,13 @@
 import '@web/xota.js';
 import '@web/flash-image.js';
 import crosspoint from '../../profiles/crosspoint.json' with { type: 'json' };
+import { panelForMachine } from './devices';
 import type { Settings } from './types';
 
 export interface Flash {
   flash: Uint8Array;
   machine: Machine;
+  panel: Settings['panel'];
   composed: boolean;
   /** How an app image was composed, for the status bar and the log; null when the image passed through. */
   composition: string | null;
@@ -42,12 +44,14 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
     // application for the boot chip; then every application is verified.
     if (!FlashImage.expandMerged(bytes)) throw new Error('This 16 MiB file is not an ESP flash image: no bootloader or partition table.');
     await validateFlash(bytes);
-    return { flash: bytes, machine: FlashImage.selectMachine(chipOf(bytes), device), composed: false, composition: null };
+    const machine = FlashImage.selectMachine(chipOf(bytes), device);
+    return { flash: bytes, machine, panel: panelForMachine(machine, panel), composed: false, composition: null };
   }
   const merged = !xota && FlashImage.expandMerged(bytes);
   if (merged) {
     await validateFlash(merged);
-    return { flash: merged, machine: FlashImage.selectMachine(chipOf(merged), device), composed: false, composition: null };
+    const machine = FlashImage.selectMachine(chipOf(merged), device);
+    return { flash: merged, machine, panel: panelForMachine(machine, panel), composed: false, composition: null };
   }
   if (bytes.length < 24 || bytes[0] !== 0xe9) {
     throw new Error('Choose a firmware .bin, an X4 Pro .xota update, or a 16 MiB flash dump (16777216 bytes).');
@@ -56,6 +60,7 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
   const chip = chipOf(bytes);
   if (chip !== 5 && chip !== 9) throw new Error(`Unsupported ESP chip ID ${chip}; expected ESP32-C3 (5) or ESP32-S3 (9).`);
   const machine = FlashImage.selectMachine(chip, device);
+  panel = panelForMachine(machine, panel);
   const layout = FlashImage.appLayout(machine);
   progress('Composing 16 MiB flash image…');
   const crosspointApp = FlashImage.hasCStrings(bytes, crosspoint.detect.image_strings);
@@ -73,7 +78,7 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
   ]);
   const composition = `Composed 16 MiB flash from the ${xota ? 'XOTA update' : 'app'} with ${layout.partitionTable}` +
     (seedAsset ? ` and ${x4PanelSeed ? `${machine === 'x4pro' ? 'X4 Pro' : 'X4 Classic'} ${panel} screenType` : `${crosspoint.title}'s NVS entry`}` : '');
-  return { flash: FlashImage.composeApp(bytes, { machine, boot, partitions, nvs, selectOta: xota }), machine, composed: true, composition };
+  return { flash: FlashImage.composeApp(bytes, { machine, boot, partitions, nvs, selectOta: xota }), machine, panel, composed: true, composition };
 }
 
 async function validateApp(bytes: Uint8Array): Promise<void> {

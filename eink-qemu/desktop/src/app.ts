@@ -3,9 +3,10 @@
    desktop's Rust commands or the WebAssembly build in a runtime iframe. */
 import type { Backend, DropHandlers, FileRef, Screen } from './backend';
 import { appendLines, clearConsole } from './console';
+import { visibleConsoleLines } from './console-filter';
 import { choose, confirm, dialogOpen, prompt } from './dialog';
 import { prepareFlash } from './firmware';
-import { selectedDevice } from './devices';
+import { panelForMachine, selectedDevice } from './devices';
 import { attachHeap, heapSession, setElf, setHeapAvailable, showPane, useElf } from './heap';
 import { Readiness } from './readiness';
 import { keyboardKey, keyboardHint, keyHint, keyTitle } from './keyboard';
@@ -37,6 +38,9 @@ let card: CardInfo | null = null;
 let pending = false; // Preparing firmware before the session starts.
 let screen: Screen | null = null;
 let cardNotices: string[] = [];
+let activeMachine: Machine | null = null;
+let activePanel: Settings['panel'] | null = null;
+
 
 const status = (text: string) => { $('status').textContent = text; };
 const timingLabel = () => session.turbo ? 'Turbo (not timing-accurate)' : 'Accurate timing';
@@ -153,7 +157,14 @@ async function start() {
     status('Loading firmware…');
     const input = await api.readFirmware();
     const device = selectedDevice(settings.device, setup?.firmware ?? null) ?? 'auto';
-    const { flash, machine, composed, composition: composedFrom } = await prepareFlash(input, device, settings.panel, status);
+    const { flash, machine, panel, composed, composition: composedFrom } = await prepareFlash(input, device, settings.panel, status);
+    if (panel !== settings.panel) {
+      settings = await api.settings({ panel });
+      if (setup) setup = { ...setup, settings };
+      paintControls();
+    }
+    activeMachine = machine;
+    activePanel = panel;
     const composition = composedFrom ? `${composedFrom} · ` : '';
     if (composed) {
       appendLines([composition.replace(/ · $/, '')]);
@@ -170,7 +181,7 @@ async function start() {
     // Keep Start disabled while the backend waits for bridge inspection,
     // before a native session exists to report its starting state.
     onSession(await api.start(flash, {
-      machine, panel: settings.panel, wifi: settings.wifi, wifiMode: settings.wifiMode, turbo: settings.turbo,
+      machine, panel, wifi: settings.wifi, wifiMode: settings.wifiMode, turbo: settings.turbo,
       ghosting: hasGhosting(machine) && settings.ghosting,
     }));
     pending = false;
@@ -955,7 +966,7 @@ export async function boot(backend: Backend) {
   $('card-menu').querySelector<HTMLElement>('[data-card="resize"]')!.hidden = !can.cardResize;
 
   const state = await api.attach({
-    log: (lines) => { appendLines(lines); watchLog(lines); },
+    log: (lines) => { appendLines(visibleConsoleLines(lines, activeMachine ?? session.machine, activePanel ?? settings.panel)); watchLog(lines); },
     screen: watchScreen,
     session: onSession,
     sdReset: () => { releaseTouch?.(); resetting('SD card changed · '); },
@@ -1017,7 +1028,10 @@ export async function boot(backend: Backend) {
   attachSetup({
     choose: () => void chooseFirmware(),
     recent: (path) => { if (session.state === 'idle' && !pending) void useFirmware(api.recentFirmware(path)); },
-    device: async (device) => { if (await save({ device }) && firmware) void start(); },
+    device: async (device) => {
+      const panel = panelForMachine(device, settings.panel);
+      if (await save({ device, panel }) && firmware) void start();
+    },
     panel: async (panel) => { if (await save({ panel }) && firmware) void start(); },
     option: (option, on) => void save({ [option]: on }),
     wifiMode: async (wifiMode) => {

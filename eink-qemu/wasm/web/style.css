@@ -284,7 +284,12 @@ a.icon-button:hover { background: var(--surface-2); color: var(--text); }
    Classic stage width on desktop; keep the normal fluid layout on narrow
    windows and phones. */
 @media (min-width: 1241px) {
-  .app:has(#keys[data-machine="x4pro"]) .stage { min-width: 620px; }
+  /* Keep the X4 Pro stage at the same desktop width as the X4 Classic. A
+     min-width alone only sets the lower bound; fit-content can still expand
+     the stage and steal width from the console. */
+  .app:has(#keys[data-machine="x4pro"]) {
+    grid-template-columns: minmax(var(--sd-min), var(--sd-max)) 620px minmax(var(--output-min), 1fr);
+  }
 }
 
 /* Console */

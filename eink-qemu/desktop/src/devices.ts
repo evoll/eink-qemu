@@ -18,3 +18,10 @@ export function deviceOf(chip: FirmwareInfo['chip'], path: string, remembered?: 
 export function selectedDevice(device: Settings['device'], firmware: Pick<FirmwareInfo, 'chip' | 'name'> | null): Machine | null {
   return device === 'auto' ? deviceOf(firmware?.chip ?? null, firmware?.name ?? '') : device;
 }
+
+/** A panel selection supported by the chosen emulated board. X4 Pro has no
+ * SSD1677 option; when a previous X4 Classic selection is restored, use the
+ * X4 Pro factory default rather than requesting a nonexistent boot NVS asset. */
+export function panelForMachine(machine: Machine, requested: Settings['panel']): Settings['panel'] {
+  return machine === 'x4pro' && requested === 'ssd1677' ? 'uc8279-68' : requested;
+}
