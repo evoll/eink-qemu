@@ -162,6 +162,7 @@ function heapRead({id, addr, size}) {
         const complete = bytes => parent.postMessage(
             {type: 'heap-read-result', id, ok: true, bytes}, location.origin, [bytes.buffer]);
         let pointer = 0;
+        let wasmPointer = 0n;
         try {
             // This direct bridge reads QEMU's AddressSpace while the VM is
             // paused. It deliberately avoids pmemsave/xp and host-side files.
@@ -176,7 +177,11 @@ function heapRead({id, addr, size}) {
             if (pointer === 0 || pointer === 0n) throw new Error(`WASM could not allocate ${size} bytes for the memory snapshot.`);
             const offset = typeof pointer === 'bigint' ? Number(pointer) : pointer;
             if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('WASM returned an invalid heap pointer.');
-            const status = Module._qemu_browser_read_physical_memory(addr, pointer, size);
+            // MEMORY64 uses i64 for C pointers at the raw Wasm export boundary.
+            // _malloc may return a JS Number for a 32-bit-limited allocation,
+            // so normalize before calling the custom C bridge and _free.
+            wasmPointer = typeof pointer === 'bigint' ? pointer : BigInt(pointer);
+            const status = Module._qemu_browser_read_physical_memory(addr, wasmPointer, size);
             if (status !== 0) throw new Error(`QEMU AddressSpace read failed with status ${status}.`);
             const bytes = Module.HEAPU8.slice(offset, offset + size);
             if (bytes.length !== size) throw new Error(`WASM returned ${bytes.length} of ${size} requested bytes.`);
@@ -184,7 +189,7 @@ function heapRead({id, addr, size}) {
         } catch (error) {
             fail(error instanceof Error ? error.message : String(error));
         } finally {
-            if (pointer && typeof Module._free === 'function') Module._free(pointer);
+            if (pointer && typeof Module._free === 'function') Module._free(wasmPointer);
         }
         return heapHold ? undefined : 'cont';
     }, true);

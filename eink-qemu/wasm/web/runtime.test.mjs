@@ -133,17 +133,19 @@ test('heap reads use the direct QEMU physical-memory bridge without HMP or host 
         FS: {lookupPath: () => ({node: {notifyListeners() {}}})},
         HEAPU8: memory,
         _malloc: size => size === 16 ? 32 : 0,
-        _free: pointer => { assert.equal(pointer, 32); freed = true; },
+        _free: pointer => { assert.equal(pointer, 32n); freed = true; },
         _qemu_browser_read_physical_memory: (addr, pointer, size) => {
+            assert.equal(typeof pointer, 'bigint');
             called = [addr, pointer, size];
-            for (let i = 0; i < size; i++) memory[pointer + i] = (i + 1) & 0xff;
+            const offset = Number(pointer);
+            for (let i = 0; i < size; i++) memory[offset + i] = (i + 1) & 0xff;
             return 0;
         },
     };
     vm.runInContext(source, context);
     context.__testHeapRead({id: 42, addr: 0x3fc88000, size: 16});
     context.__testMonitorLine('VM status: paused');
-    assert.deepEqual(called, [0x3fc88000, 32, 16]);
+    assert.deepEqual(called, [0x3fc88000, 32n, 16]);
     assert.equal(freed, true);
     const result = sent.find(message => message.type === 'heap-read-result');
     assert.equal(result.ok, true);
