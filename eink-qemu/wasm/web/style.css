@@ -278,6 +278,15 @@ a.icon-button:hover { background: var(--surface-2); color: var(--text); }
 #keys:is([data-machine="x3"], [data-machine="x4"]) button:is(:nth-child(3), :nth-child(5), :nth-child(7)),
 #keys[data-machine="x4pro"] button:is(:nth-child(2), :nth-child(4)) { margin-left: 12px; }
 
+/* X4 Pro has fewer physical-key controls than X4 Classic. Without a stable
+   stage minimum, its key row gives the intrinsic grid track a narrower
+   max-content width and makes the console unnecessarily wide. Match the
+   Classic stage width on desktop; keep the normal fluid layout on narrow
+   windows and phones. */
+@media (min-width: 1241px) {
+  .app:has(#keys[data-machine="x4pro"]) .stage { min-width: 620px; }
+}
+
 /* Console */
 .output { grid-area: output; min-height: 0; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); }
 .output-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }

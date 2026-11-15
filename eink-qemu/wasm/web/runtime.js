@@ -6,7 +6,6 @@ const monitorInput = [];
 let monitorOutput = '';
 const monitorDecoder = new TextDecoder();
 let machineType, homeHeld = false, heapHold = false;
-let panelDiagTimer = 0, panelDiagPending = false;
 // Actions that need the VM stopped (snapshots, SD card operations), FIFO.
 // Each one runs on the 'VM status: paused' line of its own 'info status'.
 const pauses = [];
@@ -104,10 +103,6 @@ function output(line) {
 // Lines the monitor prints: prompts, echo of the page's own commands and
 // their answers. Only the 'VM status' answer drives the page; nothing is logged.
 function monitorLine(line) {
-    if (panelDiagPending && line.trim() && !line.includes('qom-get') && !line.includes('(qemu)')) {
-        panelDiagPending = false;
-        send('log', {line: `[QEMU] ${line.trim()}`});
-    }
     if (paused && line.includes('VM status: paused')) {
         const action = paused;
         const resume = action();
@@ -302,9 +297,6 @@ window.addEventListener('message', async ({source, origin, data}) => {
         heapEnd(data);
     } else if (data.type === 'boot') {
         newBoot();
-        clearInterval(panelDiagTimer);
-        panelDiagTimer = 0;
-        panelDiagPending = false;
         const {machine, panel = 'uc8279-68', flash, sd, rom, wifi = true, turbo = false, ghosting = true} = data;
         machineType = machine;
         // Picco distinguishes taps from long presses in guest time. Keep its
@@ -355,17 +347,6 @@ window.addEventListener('message', async ({source, origin, data}) => {
                 stdin.stream_ops = {...stdin.stream_ops, poll: () => 0};
                 send('running');
                 canvas.focus({preventScroll: true});
-                if (machine === 'x4classic' && panel === 'ssd1677') {
-                    // QEMU LOG_GUEST_ERROR is host-side stderr, not guest UART.
-                    // Expose controller state through a read-only QOM property.
-                    const report = () => {
-                        if (panelDiagPending || !window.Module?.FS) return;
-                        panelDiagPending = true;
-                        command('qom-get /machine/peripheral/panel diagnostics');
-                    };
-                    setTimeout(report, 3000);
-                    panelDiagTimer = setInterval(report, 10000);
-                }
             }
         };
         const script = document.createElement('script');
