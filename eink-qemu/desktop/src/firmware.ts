@@ -3,7 +3,8 @@
    partition table, or the Picco's); merged images and full dumps pass
    through. Images are validated before QEMU sees them. CrossPoint's NVS entry
    (its profile, eink-qemu/profiles/crosspoint.json) goes only into apps that
-   carry its strings, on the boards it names. */
+   carry its strings, on the boards it names; X4 panel screenType selectors
+   are seeded into newly composed X4 Pro and X4 Classic app images. */
 import '@web/xota.js';
 import '@web/flash-image.js';
 import crosspoint from '../../profiles/crosspoint.json' with { type: 'json' };
@@ -64,14 +65,14 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
   // panel is authoritative for this emulated board, so always seed its
   // screenType in newly composed app images. Full/merged flash images above
   // deliberately pass through unchanged.
-  const x4ClassicSeed = machine === 'x4classic';
+  const x4PanelSeed = machine === 'x4pro' || machine === 'x4classic';
   const seedAsset = x3Seed ? 'nvs-crosspoint.bin'
-    : x4ClassicSeed ? `nvs-x4classic-${panel}.bin` : null;
+    : x4PanelSeed ? `nvs-${machine}-${panel}.bin` : null;
   const [boot, partitions, nvs] = await Promise.all([
     bootAsset(layout.bootAsset), bootAsset(layout.partitionAsset), seedAsset ? bootAsset(seedAsset) : null,
   ]);
   const composition = `Composed 16 MiB flash from the ${xota ? 'XOTA update' : 'app'} with ${layout.partitionTable}` +
-    (seedAsset ? ` and ${x4ClassicSeed ? `X4 Classic ${panel} screenType` : `${crosspoint.title}'s NVS entry`}` : '');
+    (seedAsset ? ` and ${x4PanelSeed ? `${machine === 'x4pro' ? 'X4 Pro' : 'X4 Classic'} ${panel} screenType` : `${crosspoint.title}'s NVS entry`}` : '');
   return { flash: FlashImage.composeApp(bytes, { machine, boot, partitions, nvs, selectOta: xota }), machine, composed: true, composition };
 }
 
