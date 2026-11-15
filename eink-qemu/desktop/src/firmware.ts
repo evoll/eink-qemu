@@ -16,7 +16,7 @@ export interface Flash {
   machine: Machine;
   panel: Settings['panel'];
   composed: boolean;
-  /** How an app image was composed, for the status bar and the log; null when the image passed through. */
+  /** Composition or validation note for the status bar and console; null when no note is needed. */
   composition: string | null;
 }
 
@@ -40,16 +40,25 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
     bytes = await XOTA.decode(bytes);
   }
   if (bytes.length === 0x1000000) {
-    // The shared check covers boot magic, overlapping partitions and an
-    // application for the boot chip; then every application is verified.
+    // A complete dump keeps its original bytes and partition contents. Check
+    // its layout, bootloader and every app before passing it to QEMU.
     if (!FlashImage.expandMerged(bytes)) throw new Error('This 16 MiB file is not an ESP flash image: no bootloader or partition table.');
-    await validateFlash(bytes);
     const machine = FlashImage.selectMachine(chipOf(bytes), device);
-    return { flash: bytes, machine, panel: panelForMachine(machine, panel), composed: false, composition: null };
+    // The original X4 Classic ROM-read dump has a valid bootloader segment
+    // checksum but a stale appended bootloader SHA-256. Tolerate that one
+    // bootloader-only mismatch for this explicitly selected board; keep the
+    // bootloader structure/checksum and every application hash mandatory.
+    const bootloaderHashMismatch = await FlashImage.validateFlash(bytes, {
+      allowBootloaderHashMismatch: machine === 'x4classic',
+    });
+    const validationNote = bootloaderHashMismatch
+      ? 'Imported original X4 Classic 16 MiB flash dump unchanged; bootloader SHA-256 mismatch tolerated after checksum validation (application SHA-256 verified)'
+      : null;
+    return { flash: bytes, machine, panel: panelForMachine(machine, panel), composed: false, composition: validationNote };
   }
   const merged = !xota && FlashImage.expandMerged(bytes);
   if (merged) {
-    await validateFlash(merged);
+    await FlashImage.validateFlash(merged);
     const machine = FlashImage.selectMachine(chipOf(merged), device);
     return { flash: merged, machine, panel: panelForMachine(machine, panel), composed: false, composition: null };
   }
@@ -82,48 +91,5 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
 }
 
 async function validateApp(bytes: Uint8Array): Promise<void> {
-  const invalid = (reason: string): never => { throw new Error(`Invalid ESP application image: ${reason}.`); };
-  if (bytes.length < 24 || bytes[0] !== 0xe9 || bytes[1] < 1 || bytes[1] > 16) invalid('bad header or segment count');
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let offset = 24, checksum = 0xef;
-  for (let segment = 0; segment < bytes[1]; segment++) {
-    if (offset + 8 > bytes.length) invalid('truncated segment header');
-    const address = view.getUint32(offset, true), length = view.getUint32(offset + 4, true);
-    offset += 8;
-    if (length > 0x1000000 || offset + length > bytes.length || address + length > 0x100000000) invalid('truncated or invalid segment length');
-    for (let i = offset; i < offset + length; i++) checksum ^= bytes[i];
-    offset += length;
-  }
-  const checksumOffset = Math.floor(offset / 16) * 16 + 15;
-  if (checksumOffset >= bytes.length) invalid('truncated checksum');
-  if (bytes[checksumOffset] !== checksum) invalid('checksum mismatch');
-  if (bytes[23] > 1) invalid('invalid appended-hash flag');
-  if (bytes[23] === 1) {
-    const end = checksumOffset + 1;
-    if (end + 32 > bytes.length) invalid('truncated SHA-256 digest');
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes.slice(0, end)));
-    if (!digest.every((value, i) => value === bytes[end + i])) invalid('SHA-256 mismatch');
-  }
-}
-
-async function validateFlash(bytes: Uint8Array): Promise<void> {
-  // The second-stage bootloader is an ESP image too, before the partition table.
-  try { await validateApp(bytes.subarray(0, 0x8000)); } catch (error) {
-    throw new Error((error as Error).message.replace('application image', 'bootloader'));
-  }
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let applications = 0;
-  for (let offset = 0x8000; offset < 0x8c00; offset += 32) {
-    const magic = view.getUint16(offset, true);
-    if (magic === 0xffff || magic === 0xebeb) break;
-    if (magic !== 0x50aa) throw new Error('Invalid firmware partition table.');
-    const address = view.getUint32(offset + 4, true), size = view.getUint32(offset + 8, true);
-    if (!size || address < 0x9000 || address + size > bytes.length) throw new Error('Invalid firmware partition bounds.');
-    if (bytes[offset + 2] === 0 && bytes[address] === 0xe9) {
-      if (chipOf(bytes.subarray(address)) !== chipOf(bytes)) throw new Error('An application in this flash image is for a different chip than its bootloader.');
-      await validateApp(bytes.subarray(address, address + size));
-      applications++;
-    }
-  }
-  if (!applications) throw new Error('The flash image contains no valid ESP application.');
+  await FlashImage.validateEspImage(bytes);
 }

@@ -78,6 +78,73 @@ globalThis.FlashImage = (() => {
         flash.set(bytes, layout.appOffset);
         return flash;
     }
+    /** Validate an ESP image's header, segments and XOR checksum. App images
+        require a matching appended SHA-256. Some factory-read X4 Classic
+        flash dumps contain a bootloader whose appended digest does not match
+        the otherwise valid image; callers may tolerate that digest mismatch
+        for the bootloader only, while retaining all structural/checksum checks. */
+    async function validateEspImage(bytes, label = 'application image', allowHashMismatch = false) {
+        const invalid = reason => { throw new Error(`Invalid ESP ${label}: ${reason}.`); };
+        if (bytes.length < 24 || bytes[0] !== 0xe9 || bytes[1] < 1 || bytes[1] > 16) {
+            invalid('bad header or segment count');
+        }
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        let offset = 24, checksum = 0xef;
+        for (let segment = 0; segment < bytes[1]; segment++) {
+            if (offset + 8 > bytes.length) invalid('truncated segment header');
+            const address = view.getUint32(offset, true), length = view.getUint32(offset + 4, true);
+            offset += 8;
+            if (length > 0x1000000 || offset + length > bytes.length || address + length > 0x100000000) {
+                invalid('truncated or invalid segment length');
+            }
+            for (let i = offset; i < offset + length; i++) checksum ^= bytes[i];
+            offset += length;
+        }
+        const checksumOffset = Math.floor(offset / 16) * 16 + 15;
+        if (checksumOffset >= bytes.length) invalid('truncated checksum');
+        if (bytes[checksumOffset] !== checksum) invalid('checksum mismatch');
+        if (bytes[23] > 1) invalid('invalid appended-hash flag');
+        let hashMismatch = false;
+        if (bytes[23] === 1) {
+            const end = checksumOffset + 1;
+            if (end + 32 > bytes.length) invalid('truncated SHA-256 digest');
+            const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes.subarray(0, end)));
+            hashMismatch = !digest.every((value, index) => value === bytes[end + index]);
+            if (hashMismatch && !allowHashMismatch) invalid('SHA-256 mismatch');
+        }
+        return Object.freeze({hashMismatch});
+    }
+
+    /** Validate a merged image or full flash dump. Only the bootloader hash
+        may be tolerated by an explicitly opted-in X4 Classic full-dump path;
+        application hashes remain mandatory. Returns whether that exception
+        was used so the UI can report it to the user. */
+    async function validateFlash(bytes, {allowBootloaderHashMismatch = false} = {}) {
+        const boot = await validateEspImage(bytes.subarray(0, 0x8000), 'bootloader', allowBootloaderHashMismatch);
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const bootChip = view.getUint16(12, true);
+        let applications = 0;
+        for (let offset = 0x8000; offset < 0x8c00; offset += 32) {
+            const magic = view.getUint16(offset, true);
+            if (magic === 0xffff || magic === 0xebeb) break;
+            if (magic !== 0x50aa) throw new Error('Invalid firmware partition table.');
+            const address = view.getUint32(offset + 4, true), size = view.getUint32(offset + 8, true);
+            if (!size || address < 0x9000 || address + size > bytes.length) {
+                throw new Error('Invalid firmware partition bounds.');
+            }
+            if (bytes[offset + 2] === 0 && bytes[address] === 0xe9) {
+                const appView = new DataView(bytes.buffer, bytes.byteOffset + address, bytes.byteLength - address);
+                if (appView.getUint16(12, true) !== bootChip) {
+                    throw new Error('An application in this flash image is for a different chip than its bootloader.');
+                }
+                await validateEspImage(bytes.subarray(address, address + size));
+                applications++;
+            }
+        }
+        if (!applications) throw new Error('The flash image contains no valid ESP application.');
+        return boot.hashMismatch;
+    }
+
     function expandMerged(bytes) {
         if (bytes.length < 0x8002 || bytes[0] !== 0xe9 ||
             bytes[0x8000] !== 0xaa || bytes[0x8001] !== 0x50) return null;
@@ -107,5 +174,5 @@ globalThis.FlashImage = (() => {
             return false;
         });
     }
-    return Object.freeze({expandMerged, selectMachine, appLayout, composeApp, hasCStrings});
+    return Object.freeze({expandMerged, selectMachine, appLayout, composeApp, hasCStrings, validateEspImage, validateFlash});
 })();

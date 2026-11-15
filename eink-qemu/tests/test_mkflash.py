@@ -57,15 +57,6 @@ class MkflashTest(unittest.TestCase):
         path.write_bytes(data)
         return path
 
-    def test_x4classic_partition_uses_littlefs_subtype_and_preserves_stock_bounds(self):
-        table = mkflash.partition_table(mkflash.BOOT_DIR / 'partitions-x4classic.csv')
-        entries = mkflash.read_partitions(table)
-        filesystem = [entry for entry in entries if entry[2] == 0xFD0000]
-        self.assertEqual(filesystem, [(1, 0x83, 0xFD0000, 0x14000)])
-        labels = [mkflash.ENTRY.unpack_from(table, pos)[5].split(b'\0', 1)[0]
-                  for pos in range(0, len(entries) * mkflash.ENTRY.size, mkflash.ENTRY.size)]
-        self.assertIn(b'spiffs', labels)
-
     def test_partition_reference(self):
         # SHA256 of CrossPoint 1.6.5 .pio/build/default/partitions.bin, which
         # is Arduino-ESP32's default_16MB.csv.

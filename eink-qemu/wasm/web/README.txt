@@ -52,7 +52,12 @@ added only to X3 apps that carry its strings (eink-qemu/profiles/crosspoint.json
 App bytes stay unchanged. No esptool or PlatformIO is needed. Boot asset
 provenance and licenses are in eink-qemu/boot/README.md (boot-provenance.md in
 the package). Unsupported chips, invalid headers and apps exceeding the selected board partition
-are rejected. Full 16 MiB images pass through unchanged.
+are rejected. Full 16 MiB images pass through unchanged after validating the
+bootloader, partition table and every populated application partition. For an
+explicitly selected X4 Classic full-flash dump only, a bootloader appended
+SHA-256 mismatch is tolerated when the ESP segment checksum and structure are
+valid; application SHA-256 validation remains strict. This accommodates the
+original X4 Classic ROM-read dump without rewriting any flash bytes.
 The hosted copy is https://evoll.github.io/eink-qemu/ (no firmware included).
 X4 Pro defaults to UC8279 revision 0x68. Use ?turbo=0 for measured timing.
 Select the display controller under Display panel in the firmware card. X4 Classic also offers SSD1677; for example, use ?device=x4classic&panel=ssd1677.
