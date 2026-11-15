@@ -14,7 +14,7 @@ body { user-select: none; -webkit-user-select: none; }
 #console, .filter input, .intro, #screen:not(:has(canvas, iframe)) { user-select: text; -webkit-user-select: text; }
 
 /* Panel widths are the grid variables the page already reads; the gutters set them. */
-.app { --sd-min: var(--sd-w, 300px); --sd-max: var(--sd-w, 300px); --output-min: var(--output-w, 380px); }
+.app { --sd-min: var(--sd-w, 340px); --sd-max: var(--sd-w, 340px); --output-min: var(--output-w, 600px); }
 .gutter {
   position: absolute; top: 0; bottom: 0; width: 9px; z-index: 5; cursor: col-resize; touch-action: none;
 }

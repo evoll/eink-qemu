@@ -81,10 +81,16 @@ for (const tab of document.querySelectorAll<HTMLElement>('.tabs [role=tab]')) ta
 
 /* Panel widths: the gutters at the stage's edges set the grid's variables.
    The stage keeps room for a device; widths shrink with the window. */
-const defaults = { sd: 300, output: 380 };
+const defaults = { sd: 340, output: 600 };
 const widths = { ...defaults };
 try {
   const saved = JSON.parse(localStorage.getItem('eink-qemu-panels') || '{}');
+  // Migrate the previous factory widths once; preserve any user-resized values.
+  if (saved?.sd === 300 && saved?.output === 380) {
+    saved.sd = defaults.sd;
+    saved.output = defaults.output;
+    localStorage.setItem('eink-qemu-panels', JSON.stringify(saved));
+  }
   for (const side of ['sd', 'output'] as const) if (Number.isFinite(saved?.[side])) widths[side] = saved[side];
 } catch {}
 // The SD minimum fits both labelled upload actions.

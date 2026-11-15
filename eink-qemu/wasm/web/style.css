@@ -108,7 +108,7 @@ a.icon-button:hover { background: var(--surface-2); color: var(--text); }
      at a useful width and the console takes the rest, since log lines are long.
      app.ts reads these widths to size the screen without a layout loop; it
      assumes the SD panel at its maximum, which the grid grants it first. */
-  --sd-min: 260px; --sd-max: 300px; --output-min: 320px;
+  --sd-min: 300px; --sd-max: 340px; --output-min: 600px;
   grid-template-columns: minmax(var(--sd-min), var(--sd-max))
     fit-content(calc(100% - var(--sd-max) - var(--output-min))) minmax(var(--output-min), 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -278,16 +278,13 @@ a.icon-button:hover { background: var(--surface-2); color: var(--text); }
 #keys:is([data-machine="x3"], [data-machine="x4"]) button:is(:nth-child(3), :nth-child(5), :nth-child(7)),
 #keys[data-machine="x4pro"] button:is(:nth-child(2), :nth-child(4)) { margin-left: 12px; }
 
-/* X4 Pro has fewer physical-key controls than X4 Classic. Without a stable
-   stage minimum, its key row gives the intrinsic grid track a narrower
-   max-content width and makes the console unnecessarily wide. Match the
-   Classic stage width on desktop; keep the normal fluid layout on narrow
-   windows and phones. */
+/* Keep the desktop geometry identical for every device profile. The SD
+   browser is slightly wider, the device stage has a stable 620px track, and
+   the console receives the remaining width. This avoids profile-dependent
+   shifts caused by different physical-key rows or intrinsic device widths.
+   Narrow windows and phones retain the fluid/stacked layout. */
 @media (min-width: 1241px) {
-  /* Keep the X4 Pro stage at the same desktop width as the X4 Classic. A
-     min-width alone only sets the lower bound; fit-content can still expand
-     the stage and steal width from the console. */
-  .app:has(#keys[data-machine="x4pro"]) {
+  .app {
     grid-template-columns: minmax(var(--sd-min), var(--sd-max)) 620px minmax(var(--output-min), 1fr);
   }
 }
