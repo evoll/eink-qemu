@@ -141,12 +141,17 @@ static void esp32s3_spi_txrx_buffer(ESP32S3SpiState *s,
     int bytes = MAX(tx_bytes, rx_bytes);
     for (int i = 0; i < bytes; ++i) {
         uint8_t byte = 0;
-        if (byte < tx_bytes) {
-            memcpy(&byte, tx + i, 1);
+        /* The transfer position, not the current data byte, determines
+         * whether this iteration has a TX or RX byte. Comparing `byte`
+         * made the result depend on the payload value and could skip RX
+         * copies or read beyond the TX buffer on full-duplex transfers.
+         */
+        if (i < tx_bytes) {
+            memcpy(&byte, (const uint8_t *)tx + i, 1);
         }
         uint32_t res = ssi_transfer(s->spi, byte);
-        if (byte < rx_bytes) {
-            memcpy(rx + i, &res, 1);
+        if (i < rx_bytes) {
+            memcpy((uint8_t *)rx + i, &res, 1);
         }
     }
 }

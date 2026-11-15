@@ -200,7 +200,7 @@ jobs:
         if: matrix.target == 'xtensa-softmmu' && endsWith(matrix.platform, '-linux-gnu')
         env:
           QEMU_XTENSA: ${{ github.workspace }}/install/qemu/bin/qemu-system-xtensa
-        run: python3 -m unittest eink-qemu.tests.test_x4classic_boot -v
+        run: python3 -m unittest eink-qemu.tests.test_x4classic_boot eink-qemu.tests.test_esp32s3_spi_transfer -v
 
       - name: Bundle Windows DLLs (${{ matrix.target }} @ ${{ matrix.platform }})
         if : ${{ matrix.platform == 'x86_64-w64-mingw32' }}
