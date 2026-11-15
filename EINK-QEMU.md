@@ -25,9 +25,8 @@ The X4 Classic firmware board profile specifies an 800 × 480 SPI e-paper
 panel at 10 MHz: SCLK GPIO12, MOSI GPIO11, CS GPIO13, DC GPIO14, reset GPIO10,
 and BUSY GPIO18. The QEMU board wiring uses these same signal pins. The
 firmware profile's seven active-low keys are Back GPIO9, Confirm GPIO8,
-Left GPIO5, Right GPIO2, Up GPIO0, Down GPIO7, and Power GPIO3. The QEMU key
-mapping is aligned to that order; in particular, Up and Down are GPIO0 and
-GPIO7 respectively.
+Left GPIO5, Right GPIO2, Up GPIO7, Down GPIO0, and Power GPIO3. The QEMU key
+mapping follows the corrected board pinout: Up is GPIO7 and Down is GPIO0.
 
 The 1-bit SDMMC firmware pinout is CLK GPIO41, CMD GPIO42, DAT0 GPIO40;
 GPIO6 controls its power rail active-low. The shared I2C bus is SDA GPIO39 and

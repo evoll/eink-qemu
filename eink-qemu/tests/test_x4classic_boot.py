@@ -102,6 +102,33 @@ class X4ClassicBoard(unittest.TestCase):
                 self.assertNotEqual(self.read(self.GPIO_IN) & mask, 0,
                                     f'{name} must release GPIO{pin}')
 
+    def test_host_keyboard_events_drive_all_active_low_gpio_pins(self):
+        # Exercise the same QEMU input-event path used by the desktop and WASM
+        # frontends, not only the device's direct QOM test properties.
+        mapping = {
+            'up': ('up', 7), 'down': ('down', 0),
+            'left': ('left', 5), 'right': ('right', 2),
+            'confirm': ('ret', 8), 'back': ('esc', 9), 'power': ('p', 3),
+        }
+        for name, (qcode, pin) in mapping.items():
+            with self.subTest(key=name, qcode=qcode, gpio=pin):
+                mask = 1 << pin
+                baseline = self.read(self.GPIO_IN)
+                self.assertNotEqual(baseline & mask, 0,
+                                    f'{name} GPIO{pin} must idle high')
+                self.qmp('input-send-event', events=[{
+                    'type': 'key',
+                    'data': {'down': True, 'key': {'type': 'qcode', 'data': qcode}},
+                }])
+                self.assertEqual(self.read(self.GPIO_IN) & mask, 0,
+                                 f'host {qcode} press must pull {name} GPIO{pin} low')
+                self.qmp('input-send-event', events=[{
+                    'type': 'key',
+                    'data': {'down': False, 'key': {'type': 'qcode', 'data': qcode}},
+                }])
+                self.assertNotEqual(self.read(self.GPIO_IN) & mask, 0,
+                                    f'host {qcode} release must restore {name} GPIO{pin} high')
+
     def test_board_status_inputs_and_motion_sensor(self):
         levels = self.read(self.GPIO_IN)
         self.assertEqual(levels & (1 << 21), 0, 'GPIO21 charger status must idle low')

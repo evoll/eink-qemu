@@ -196,6 +196,12 @@ jobs:
           rc=$?
           [ $rc = 124 ] || { echo "machine $m exited with $rc"; exit 1; }
 
+      - name: Test X4 Classic GPIO and host keyboard input
+        if: matrix.target == 'xtensa-softmmu' && endsWith(matrix.platform, '-linux-gnu')
+        env:
+          QEMU_XTENSA: ${{ github.workspace }}/install/qemu/bin/qemu-system-xtensa
+        run: python3 -m unittest eink-qemu.tests.test_x4classic_boot -v
+
       - name: Bundle Windows DLLs (${{ matrix.target }} @ ${{ matrix.platform }})
         if : ${{ matrix.platform == 'x86_64-w64-mingw32' }}
         run: |
