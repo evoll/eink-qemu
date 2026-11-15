@@ -1,5 +1,5 @@
 /*
- * Xteink X4 Classic physical keys: Up (GPIO7), Down (GPIO0), Left (GPIO5),
+ * Xteink X4 Classic physical keys: Up (GPIO0), Down (GPIO7), Left (GPIO5),
  * Right (GPIO2), Confirm (GPIO8), Back (GPIO9), Power (GPIO3), active-low.
  * Host keyboard: arrows, Enter, Escape/Backspace, and P. QOM bool properties
  * "up", "down", "left", "right", "confirm", "back", and "power" allow

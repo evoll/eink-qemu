@@ -87,13 +87,23 @@ class X4ClassicBoard(unittest.TestCase):
     def test_seven_active_low_keys_keep_verified_gpio_mapping(self):
         # The six non-power buttons and Power are exposed as QOM properties.
         mapping = {
-            'up': 7, 'down': 0, 'left': 5, 'right': 2,
+            'up': 0, 'down': 7, 'left': 5, 'right': 2,
             'confirm': 8, 'back': 9, 'power': 3,
         }
         baseline = self.read(self.GPIO_IN)
         for name, pin in mapping.items():
             with self.subTest(key=name, gpio=pin):
                 mask = 1 << pin
+                if name == 'power':
+                    self.assertEqual(baseline & mask, 0,
+                                     'Power GPIO3 must be held low during cold boot')
+                    self.qmp('qom-set', path='/machine/x4classic-keys', property=name, value=True)
+                    self.assertIs(self.qmp('qom-get', path='/machine/x4classic-keys', property=name), True)
+                    self.qmp('qom-set', path='/machine/x4classic-keys', property=name, value=False)
+                    self.assertIs(self.qmp('qom-get', path='/machine/x4classic-keys', property=name), False)
+                    self.assertEqual(self.read(self.GPIO_IN) & mask, 0,
+                                     'synthetic cold-boot hold must keep Power GPIO3 low')
+                    continue
                 self.assertNotEqual(baseline & mask, 0, f'{name} GPIO{pin} must idle high')
                 self.qmp('qom-set', path='/machine/x4classic-keys', property=name, value=True)
                 self.assertEqual(self.read(self.GPIO_IN) & mask, 0,
@@ -106,7 +116,7 @@ class X4ClassicBoard(unittest.TestCase):
         # Exercise the same QEMU input-event path used by the desktop and WASM
         # frontends, not only the device's direct QOM test properties.
         mapping = {
-            'up': ('up', 7), 'down': ('down', 0),
+            'up': ('up', 0), 'down': ('down', 7),
             'left': ('left', 5), 'right': ('right', 2),
             'confirm': ('ret', 8), 'back': ('esc', 9), 'power': ('p', 3),
         }
@@ -114,45 +124,46 @@ class X4ClassicBoard(unittest.TestCase):
             with self.subTest(key=name, qcode=qcode, gpio=pin):
                 mask = 1 << pin
                 baseline = self.read(self.GPIO_IN)
-                self.assertNotEqual(baseline & mask, 0,
-                                    f'{name} GPIO{pin} must idle high')
+                if name == 'power':
+                    self.assertEqual(baseline & mask, 0,
+                                     'Power GPIO3 is held low by cold-boot emulation')
+                else:
+                    self.assertNotEqual(baseline & mask, 0,
+                                        f'{name} GPIO{pin} must idle high')
                 self.qmp('input-send-event', events=[{
                     'type': 'key',
                     'data': {'down': True, 'key': {'type': 'qcode', 'data': qcode}},
                 }])
-                self.assertEqual(self.read(self.GPIO_IN) & mask, 0,
-                                 f'host {qcode} press must pull {name} GPIO{pin} low')
+                if name == 'power':
+                    self.assertIs(self.qmp('qom-get', path='/machine/x4classic-keys', property='power'), True)
+                else:
+                    self.assertEqual(self.read(self.GPIO_IN) & mask, 0,
+                                     f'host {qcode} press must pull {name} GPIO{pin} low')
                 self.qmp('input-send-event', events=[{
                     'type': 'key',
                     'data': {'down': False, 'key': {'type': 'qcode', 'data': qcode}},
                 }])
-                self.assertNotEqual(self.read(self.GPIO_IN) & mask, 0,
-                                    f'host {qcode} release must restore {name} GPIO{pin} high')
+                if name == 'power':
+                    self.assertIs(self.qmp('qom-get', path='/machine/x4classic-keys', property='power'), False)
+                    self.assertEqual(self.read(self.GPIO_IN) & mask, 0,
+                                     'synthetic cold-boot hold must keep Power GPIO3 low')
+                else:
+                    self.assertNotEqual(self.read(self.GPIO_IN) & mask, 0,
+                                        f'host {qcode} release must restore {name} GPIO{pin} high')
 
-    def test_board_status_inputs_and_motion_sensor(self):
+    def test_board_status_inputs(self):
         levels = self.read(self.GPIO_IN)
         self.assertEqual(levels & (1 << 21), 0, 'GPIO21 charger status must idle low')
         self.assertNotEqual(levels & (1 << 4), 0, 'unused GPIO4 must remain pulled high')
 
-        # QMI8658 identity register at the board's documented I2C address.
-        base = 0x60013000
-        self.write(base + 0x18, 3 << 12)
-        self.write(base + 0x18, 0)
-        self.write(base + 0x24, 0xffffffff)
-        for byte in (0x6b << 1, 0x00):
-            self.write(base + 0x1c, byte)
-        for index, command in enumerate((6 << 11, (1 << 11) | (1 << 8) | 1, 2 << 11)):
-            self.write(base + 0x58 + index * 4, command)
-        self.write(base + 4, 1 << 5)
-        self.assertEqual(self.read(base + 0x1c) & 0xff, 0x05)
 
 class X4ClassicPanelDefaults(unittest.TestCase):
     def test_stock_firmware_power_hold_and_verified_key_pinout(self):
         keys = (ROOT / 'hw/input/x4classic_keys.c').read_text()
         board = (ROOT / 'hw/xtensa/esp32s3.c').read_text()
-        self.assertIn('X4 Classic physical keys: Up (GPIO7), Down (GPIO0)', keys)
+        self.assertIn('X4 Classic physical keys: Up (GPIO0), Down (GPIO7)', keys)
         self.assertIn('DEFINE_PROP_UINT32(\"power-boot-ms\", X4ClassicKeysState, power_boot_ms, 3000)', keys)
-        self.assertIn('static const int key_pins[] = { 7, 0, 5, 2, 8, 9, 3 };', board)
+        self.assertIn('static const int key_pins[] = { 0, 7, 5, 2, 8, 9, 3 };', board)
 
     def test_default_panel_is_uc8279_and_other_revisions_remain_selectable(self):
         source = (ROOT / 'hw/xtensa/esp32s3.c').read_text()

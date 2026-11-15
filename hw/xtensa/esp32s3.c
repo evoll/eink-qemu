@@ -1329,7 +1329,7 @@ static void x4pro_board_init(Esp32s3SocState *ss, DeviceState *spi2)
 /*
  * Xteink X4 Classic: ESP32-S3, 800x480 SPI panel. Display pins are
  * SCLK=12, MOSI=11, CS=13, DC=14, RST=10, BUSY=18. Seven active-low
- * keys: Up=GPIO7, Down=GPIO0, Left=GPIO5, Right=GPIO2, Confirm=GPIO8,
+ * keys: Up=GPIO0, Down=GPIO7, Left=GPIO5, Right=GPIO2, Confirm=GPIO8,
  * Back=GPIO9, Power=GPIO3. No touch controller or front light.
  * GPIO1 is the active-high power latch; GPIO6 is active-low SD power.
  */
@@ -1355,7 +1355,7 @@ static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
 
     DeviceState *keys = qdev_new("x4classic-keys");
     object_property_add_child(qdev_get_machine(), "x4classic-keys", OBJECT(keys));
-    static const int key_pins[] = { 7, 0, 5, 2, 8, 9, 3 };
+    static const int key_pins[] = { 0, 7, 5, 2, 8, 9, 3 };
     for (int k = 0; k < ARRAY_SIZE(key_pins); k++) {
         qdev_connect_gpio_out(keys, k, qdev_get_gpio_in_named(gpio, ESP32S3_GPIO_IN, key_pins[k]));
     }
