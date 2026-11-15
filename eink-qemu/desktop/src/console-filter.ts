@@ -1,4 +1,4 @@
-import type { Machine, Settings } from './types';
+import type { Settings } from './types';
 
 /** Hide routine SSD1677 command waits from the visible X4 Classic console.
  * The caller must still feed the original lines to readiness and diagnostics. */
