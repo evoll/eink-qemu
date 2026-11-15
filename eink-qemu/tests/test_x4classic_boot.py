@@ -87,7 +87,7 @@ class X4ClassicBoard(unittest.TestCase):
     def test_seven_active_low_keys_keep_verified_gpio_mapping(self):
         # The six non-power buttons and Power are exposed as QOM properties.
         mapping = {
-            'up': 0, 'down': 7, 'left': 5, 'right': 2,
+            'up': 7, 'down': 0, 'left': 5, 'right': 2,
             'confirm': 8, 'back': 9, 'power': 3,
         }
         baseline = self.read(self.GPIO_IN)
@@ -120,6 +120,13 @@ class X4ClassicBoard(unittest.TestCase):
         self.assertEqual(self.read(base + 0x1c) & 0xff, 0x05)
 
 class X4ClassicPanelDefaults(unittest.TestCase):
+    def test_stock_firmware_power_hold_and_verified_key_pinout(self):
+        keys = (ROOT / 'hw/input/x4classic_keys.c').read_text()
+        board = (ROOT / 'hw/xtensa/esp32s3.c').read_text()
+        self.assertIn('X4 Classic physical keys: Up (GPIO7), Down (GPIO0)', keys)
+        self.assertIn('DEFINE_PROP_UINT32(\"power-boot-ms\", X4ClassicKeysState, power_boot_ms, 3000)', keys)
+        self.assertIn('static const int key_pins[] = { 7, 0, 5, 2, 8, 9, 3 };', board)
+
     def test_default_panel_is_uc8279_and_other_revisions_remain_selectable(self):
         source = (ROOT / 'hw/xtensa/esp32s3.c').read_text()
         self.assertIn('s->ssd1677 = false;\n    s->uc8279_68 = true;', source)
@@ -129,9 +136,9 @@ class X4ClassicPanelDefaults(unittest.TestCase):
     def test_x4classic_app_composition_always_seeds_selected_screen_type(self):
         firmware = (ROOT / 'eink-qemu/desktop/src/firmware.ts').read_text()
         resources = (ROOT / 'eink-qemu/desktop/scripts/prepare-resources.sh').read_text()
-        self.assertIn("const x4ClassicSeed = machine === 'x4classic';", firmware)
+        self.assertIn("const x4PanelSeed = machine === 'x4pro' || machine === 'x4classic';", firmware)
         self.assertIn("('uc8179', 1), ('uc8279-68', 2), ('ssd1677', 3)", resources)
-        self.assertIn('nvs-x4classic-${panel}.bin', firmware)
+        self.assertIn('`nvs-${machine}-${panel}.bin`', firmware)
 
     def test_shake_controls_are_temporarily_removed_from_frontends(self):
         paths = [

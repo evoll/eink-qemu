@@ -1,10 +1,12 @@
 /*
- * Xteink X4 Classic physical keys: Up (GPIO0), Down (GPIO7), Left (GPIO5),
+ * Xteink X4 Classic physical keys: Up (GPIO7), Down (GPIO0), Left (GPIO5),
  * Right (GPIO2), Confirm (GPIO8), Back (GPIO9), Power (GPIO3), active-low.
  * Host keyboard: arrows, Enter, Escape/Backspace, and P. QOM bool properties
  * "up", "down", "left", "right", "confirm", "back", and "power" allow
  * scripted presses, for example: qom-set /machine/x4classic-keys left true.
- * "power-boot-ms" holds Power pressed that long when the RTC controller
+ * "power-boot-ms" holds Power for 3 s by default: the stock X4 Classic
+ * firmware needs Power held until its application startup gate has passed.
+ * The RTC controller
  * signals a cold power-on ("boot" line 0), or a wake from deep sleep by a pad
  * ("boot" line 1) while Power is pressed or was pressed in the last 2 s:
  * the hand that turns the device on is still on the button while the
@@ -175,7 +177,7 @@ static void keys_init(Object *obj)
 }
 
 static const Property keys_properties[] = {
-    DEFINE_PROP_UINT32("power-boot-ms", X4ClassicKeysState, power_boot_ms, 1500),
+    DEFINE_PROP_UINT32("power-boot-ms", X4ClassicKeysState, power_boot_ms, 3000),
 };
 
 static void keys_class_init(ObjectClass *klass, const void *data)
