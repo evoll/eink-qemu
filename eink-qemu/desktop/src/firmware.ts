@@ -85,14 +85,22 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
   // screenType in newly composed app images. Full/merged flash images above
   // deliberately pass through unchanged.
   const x4PanelSeed = machine === 'x4pro' || machine === 'x4classic';
+  // The stock X4 Classic firmware mounts LittleFS during startup. Its OTA
+  // application does not contain the filesystem image, so seed the known
+  // factory filesystem only for that firmware (CrossPoint remains unchanged).
+  const x4ClassicStockLittlefs = machine === 'x4classic' && FlashImage.hasCStrings(bytes, [
+    'esp_vfs_littlefs_register',
+  ]);
   const seedAsset = x3Seed ? 'nvs-crosspoint.bin'
     : x4PanelSeed ? `nvs-${machine}-${panel}.bin` : null;
-  const [boot, partitions, nvs] = await Promise.all([
+  const [boot, partitions, nvs, littlefs] = await Promise.all([
     bootAsset(layout.bootAsset), bootAsset(layout.partitionAsset), seedAsset ? bootAsset(seedAsset) : null,
+    x4ClassicStockLittlefs ? bootAsset('x4classic-stock-littlefs.bin') : null,
   ]);
   const composition = `Composed 16 MiB flash from the ${xota ? 'XOTA update' : 'app'} with ${layout.partitionTable}` +
-    (seedAsset ? ` and ${x4PanelSeed ? `${machine === 'x4pro' ? 'X4 Pro' : 'X4 Classic'} ${panel} screenType` : `${crosspoint.title}'s NVS entry`}` : '');
-  return { flash: FlashImage.composeApp(bytes, { machine, boot, partitions, nvs, selectOta: xota }), machine, panel, composed: true, composition };
+    (seedAsset ? ` and ${x4PanelSeed ? `${machine === 'x4pro' ? 'X4 Pro' : 'X4 Classic'} ${panel} screenType` : `${crosspoint.title}'s NVS entry`}` : '') +
+    (littlefs ? ' and factory X4 Classic LittleFS seed' : '');
+  return { flash: FlashImage.composeApp(bytes, { machine, boot, partitions, nvs, littlefs, selectOta: xota }), machine, panel, composed: true, composition };
 }
 
 async function validateApp(bytes: Uint8Array): Promise<void> {

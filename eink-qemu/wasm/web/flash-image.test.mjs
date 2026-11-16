@@ -123,6 +123,25 @@ test('app composition retains existing offsets and boot selection', () => {
     const x3 = FlashImage.composeApp(app(5), {machine: 'x3', boot: app(5), partitions: table(), nvs});
     assert.deepEqual(x3.subarray(0x9000, 0xe000), nvs);
 });
+test('X4 Classic stock LittleFS seed is copied only into its exact partition', () => {
+    const partitions = table(false, true);
+    // The X4 Classic CSV uses the LittleFS subtype (0x83) for this partition.
+    partitions[4 * 32 + 3] = 0x83;
+    const seed = new Uint8Array(0x14000);
+    for (let i = 0; i < seed.length; i++) seed[i] = (i * 17 + 3) & 0xff;
+    const flash = FlashImage.composeApp(app(9), {
+        machine: 'x4classic', boot: app(9), partitions, littlefs: seed,
+    });
+    assert.deepEqual(flash.subarray(0xfd0000, 0xfe4000), seed);
+    assert.ok(flash.subarray(0xfe4000, 0x1000000).every(byte => byte === 0xff));
+    assert.throws(() => FlashImage.composeApp(app(9), {
+        machine: 'x4pro', boot: app(9), partitions, littlefs: seed,
+    }), /partition table/);
+    assert.throws(() => FlashImage.composeApp(app(9), {
+        machine: 'x4classic', boot: app(9), partitions, littlefs: new Uint8Array(0x1000),
+    }), /partition table/);
+});
+
 test('NVS is written only when given, and must fit the table\'s NVS partition', () => {
     const options = {machine: 'x3', boot: app(5), partitions: table()};
     const plain = FlashImage.composeApp(app(5), options);

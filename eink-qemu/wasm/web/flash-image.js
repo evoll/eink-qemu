@@ -43,7 +43,7 @@ globalThis.FlashImage = (() => {
         }
         return partitions;
     }
-    function composeApp(input, {machine, boot, partitions, nvs = null, selectOta = false}) {
+    function composeApp(input, {machine, boot, partitions, nvs = null, littlefs = null, selectOta = false}) {
         const bytes = new Uint8Array(input), layout = appLayout(machine);
         if (bytes.length < 24 || bytes[0] !== 0xe9) throw new Error('Expected an ESP application image.');
         const chip = bytes[12] | bytes[13] << 8;
@@ -52,22 +52,26 @@ globalThis.FlashImage = (() => {
         boot = new Uint8Array(boot);
         partitions = new Uint8Array(partitions);
         nvs = nvs == null ? null : new Uint8Array(nvs);
+        littlefs = littlefs == null ? null : new Uint8Array(littlefs);
         if (boot.length < 24 || boot.length > 0x8000 || boot[0] !== 0xe9 ||
             (boot[12] | boot[13] << 8) !== chip || partitions.length !== 0xc00) {
             throw new Error('Invalid bundled boot assets. Run package-web.sh to regenerate the distribution.');
         }
         const entries = readPartitions(partitions);
         const nvsPartition = entries.find(p => p.type === 1 && p.subtype === 2);
+        const littlefsPartition = entries.find(p => p.type === 1 && p.subtype === 0x83 && p.offset === 0xfd0000);
         if (!entries.some(p => p.type === 0 && p.subtype === 0x10 &&
                 p.offset === layout.appOffset && p.size === layout.appSize) ||
             !entries.some(p => p.type === 1 && p.subtype === 0 && p.offset === layout.otaOffset && p.size === 0x2000) ||
-            (nvs && nvsPartition?.size !== nvs.length)) {
+            (nvs && nvsPartition?.size !== nvs.length) ||
+            (littlefs && (machine !== 'x4classic' || littlefsPartition?.size !== littlefs.length || littlefs.length !== 0x14000))) {
             throw new Error(`Bundled partition table does not match ${machine}.`);
         }
         const flash = new Uint8Array(0x1000000).fill(0xff);
         flash.set(boot, 0);
         flash.set(partitions, 0x8000);
         if (nvs) flash.set(nvs, nvsPartition.offset);
+        if (littlefs) flash.set(littlefs, littlefsPartition.offset);
         if (machine === 'picco' || selectOta) {
             // Select valid ota_0; Picco's factory recovery slot remains erased.
             const view = new DataView(flash.buffer);
