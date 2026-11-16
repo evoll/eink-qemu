@@ -10,6 +10,7 @@ declare const FlashImage: {
   expandMerged(bytes: Uint8Array): Uint8Array | null | false;
   validateEspImage(bytes: Uint8Array, label?: string, allowHashMismatch?: boolean): Promise<{hashMismatch: boolean}>;
   validateFlash(bytes: Uint8Array, options?: {allowBootloaderHashMismatch?: boolean}): Promise<boolean>;
+  normalizeX4ClassicLittlefs(bytes: Uint8Array): { flash: Uint8Array; changed: boolean };
   composeApp(app: Uint8Array, options: {
     machine: Machine; boot: ArrayBuffer | Uint8Array; partitions: ArrayBuffer | Uint8Array;
     nvs?: ArrayBuffer | Uint8Array | null; selectOta?: boolean;
