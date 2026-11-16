@@ -30,6 +30,7 @@
 #include "hw/xtensa/esp32s3_intc.h"
 
 #include "hw/sd/dwc_sdmmc.h"
+#include "hw/sd/sd.h"
 #include "hw/misc/ssi_psram.h"
 #include "core-esp32s3/core-isa.h"
 #include "qemu/datadir.h"
@@ -1132,6 +1133,16 @@ static void esp32s3_machine_init(MachineState *machine)
 
     esp32s3_machine_init_sd(ss);
 
+    /* The SD card device is realized after board GPIO wiring. Start with
+     * the X4 Classic rail off; guest firmware must assert GPIO6 low to power it.
+     */
+    if (object_dynamic_cast(OBJECT(machine), TYPE_X4CLASSIC_MACHINE)) {
+        SDBus *sd_bus = SD_BUS(qdev_get_child_bus(DEVICE(&ss->sdmmc), "sd-bus"));
+        sdbus_set_inserted(sd_bus, false);
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "X4 Classic: SD power rail initialized off (GPIO6 active-low)\n");
+    }
+
     /* Need MMU initialized prior to ELF loading,
      * so that ELF gets loaded into virtual addresses
      */
@@ -1332,16 +1343,18 @@ static void x4pro_board_init(Esp32s3SocState *ss, DeviceState *spi2)
  * keys: Up=GPIO0, Down=GPIO7, Left=GPIO5, Right=GPIO2, Confirm=GPIO8,
  * Back=GPIO9, Power=GPIO3. No touch controller or front light.
  * GPIO1 is the active-high power latch; GPIO6 is the active-low SD power
- * enable. The virtual SD card remains attached like on X4 Pro; GPIO6 is
- * observed for diagnostics but does not gate card visibility.
+ * enable. Model the power rail by changing SD card presence on the SD bus.
  */
-static void x4classic_sd_power_observed(void *opaque, int n, int level)
+static void x4classic_sd_power_changed(void *opaque, int n, int level)
 {
-    (void)opaque;
+    SDBus *sd_bus = opaque;
+    bool powered = (level == 0); /* active-low rail enable */
+
     (void)n;
+    sdbus_set_inserted(sd_bus, powered);
     qemu_log_mask(LOG_GUEST_ERROR,
-                  "X4 Classic: SD power GPIO6=%d (virtual SD remains attached)\n",
-                  level);
+                  "X4 Classic: SD power GPIO6=%d, card %s\n",
+                  level, powered ? "available" : "powered off");
 }
 
 static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
@@ -1349,11 +1362,10 @@ static void x4classic_board_init(Esp32s3SocState *ss, DeviceState *spi2)
     Esp32s3MachineState *machine = ESP32S3_MACHINE(qdev_get_machine());
     DeviceState *gpio = DEVICE(&ss->gpio);
     SSIBus *bus = (SSIBus *)qdev_get_child_bus(spi2, "spi");
-    /* Match X4 Pro: keep the virtual SD card attached regardless of GPIO6.
-     * Observe the physical rail signal without removing the card from SDMMC.
-     */
+    /* GPIO6 is active-low SD power enable on X4 Classic. */
+    SDBus *sd_bus = SD_BUS(qdev_get_child_bus(DEVICE(&ss->sdmmc), "sd-bus"));
     qdev_connect_gpio_out_named(gpio, ESP32S3_GPIO_OUT, 6,
-        qemu_allocate_irq(x4classic_sd_power_observed, machine, 0));
+        qemu_allocate_irq(x4classic_sd_power_changed, sd_bus, 0));
     DeviceState *panel = qdev_new(machine->ssd1677 ? "ssd1677" :
                                   machine->uc8279_68 ? "uc8279-68" : "uc8179");
     qdev_set_id(panel, g_strdup("panel"), &error_fatal);
