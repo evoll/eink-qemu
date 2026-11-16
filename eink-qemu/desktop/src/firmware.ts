@@ -93,13 +93,18 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
   ]);
   const seedAsset = x3Seed ? 'nvs-crosspoint.bin'
     : x4PanelSeed ? `nvs-${machine}-${panel}.bin` : null;
+  // The stock X4 Classic image was built for its factory bootloader. Keep
+  // this diagnostic path scoped to that firmware; CrossPoint and every other
+  // profile continue using the bundled generic ESP32-S3 bootloader.
+  const selectedBootAsset = x4ClassicStockLittlefs ? 'bootloader-x4classic-stock.bin' : layout.bootAsset;
   const [boot, partitions, nvs, littlefs] = await Promise.all([
-    bootAsset(layout.bootAsset), bootAsset(layout.partitionAsset), seedAsset ? bootAsset(seedAsset) : null,
+    bootAsset(selectedBootAsset), bootAsset(layout.partitionAsset), seedAsset ? bootAsset(seedAsset) : null,
     x4ClassicStockLittlefs ? bootAsset('x4classic-stock-littlefs.bin') : null,
   ]);
   const composition = `Composed 16 MiB flash from the ${xota ? 'XOTA update' : 'app'} with ${layout.partitionTable}` +
     (seedAsset ? ` and ${x4PanelSeed ? `${machine === 'x4pro' ? 'X4 Pro' : 'X4 Classic'} ${panel} screenType` : `${crosspoint.title}'s NVS entry`}` : '') +
-    (littlefs ? ' and factory X4 Classic LittleFS seed' : '');
+    (littlefs ? ' and factory X4 Classic LittleFS seed' : '') +
+    (x4ClassicStockLittlefs ? ' and factory X4 Classic bootloader (diagnostic)' : '');
   return { flash: FlashImage.composeApp(bytes, { machine, boot, partitions, nvs, littlefs, selectOta: xota }), machine, panel, composed: true, composition };
 }
 

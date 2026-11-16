@@ -8,6 +8,8 @@ root=$(cd "$desktop/../.." && pwd)
 boot=$desktop/public/boot
 mkdir -p "$boot"
 cp "$root"/eink-qemu/boot/bootloader-*.bin "$boot/"
+# Factory X4 Classic bootloader, extracted from the user-provided 16 MiB ROM dump.
+cp "$root"/eink-qemu/boot/bootloader-x4classic-stock.bin "$boot/"
 # Factory LittleFS seed used only by the stock X4 Classic application.
 cp "$root"/eink-qemu/boot/x4classic-stock-littlefs.bin "$boot/"
 cp "$root/eink-qemu/boot/LICENSE" "$boot/bootloader.LICENSE.txt"
