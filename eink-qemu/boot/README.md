@@ -100,3 +100,13 @@ Picco NVS is initially erased, and the bundled ESP32-S3 bootloader is reused.
 
 
 Xteink X4 Pro and X4 Classic use dedicated dual-OTA 16 MiB layouts. The X4 Classic table is `partitions-x4classic.csv`; X4 Pro is `partitions-x4pro.csv`.
+
+
+The original X4 Classic 16 MiB ROM-read dump has the `spiffs` partition at
+`0xFD0000` / `0x14000` marked with subtype SPIFFS (`0x82`), although the stock
+application contains the ESP-IDF LittleFS component and mounts this partition
+by label `spiffs`. When an X4 Classic full dump is explicitly selected, the
+web, desktop and `mkflash.py` import paths make a private copy and change only
+the partition subtype to LittleFS (`0x83`), updating the partition-table MD5.
+The partition label, bounds and filesystem payload are preserved; the uploaded
+source file is not modified. X4 Pro and other machine profiles are unchanged.

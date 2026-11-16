@@ -270,6 +270,50 @@ def build_files(directory):
     return app.read_bytes(), boot.read_bytes(), table.read_bytes()
 
 
+def normalize_x4classic_littlefs(image):
+    """Fix the stock X4 Classic LittleFS partition subtype in a private image copy.
+
+    The stock ROM dump labels the LittleFS partition ``spiffs`` but marks its
+    subtype as SPIFFS (0x82). The stock app uses ESP-IDF LittleFS, which looks
+    for subtype 0x83. Keep the label, offset, size and filesystem bytes intact.
+    """
+    if len(image) != FLASH_SIZE:
+        raise ValueError("X4 Classic normalization requires a complete 16 MiB flash image")
+    image = bytearray(image)
+    table = memoryview(image)[TABLE_OFFSET:TABLE_OFFSET + TABLE_SIZE]
+    entries = read_partitions(table)
+    target = None
+    for pos in range(0, TABLE_SIZE, ENTRY.size):
+        record = bytes(table[pos:pos + ENTRY.size])
+        if record[:2] in (b"\xff\xff", b"\xeb\xeb"):
+            break
+        _, kind, subtype, offset, size, name, _flags = ENTRY.unpack(record)
+        if name.split(b"\0", 1)[0] == b"spiffs":
+            target = (pos, kind, subtype, offset, size)
+            break
+    if target is None:
+        return bytes(image), False
+    pos, kind, subtype, offset, size = target
+    if (kind, offset, size) != (1, 0xFD0000, 0x14000):
+        raise ValueError("X4 Classic spiffs partition has unexpected type, offset or size; refusing to rewrite it")
+    if subtype == 0x83:
+        return bytes(image), False
+    if subtype != 0x82:
+        raise ValueError(f"X4 Classic spiffs partition has unexpected subtype 0x{subtype:02x}; refusing to rewrite it")
+    image[TABLE_OFFSET + pos + 3] = 0x83
+    marker = None
+    for at in range(0, TABLE_SIZE, ENTRY.size):
+        if image[TABLE_OFFSET + at:TABLE_OFFSET + at + 2] == b"\xeb\xeb":
+            marker = at
+            break
+    if marker is not None:
+        image[TABLE_OFFSET + marker + 16:TABLE_OFFSET + marker + 32] = hashlib.md5(
+            image[TABLE_OFFSET:TABLE_OFFSET + marker]).digest()
+    # Re-parse after rewriting to verify the ESP-IDF table checksum and layout.
+    read_partitions(image[TABLE_OFFSET:TABLE_OFFSET + TABLE_SIZE])
+    return bytes(image), True
+
+
 def make_flash(source, machine=None, partitions=None):
     source = Path(source)
     table = read_partition_file(partitions) if partitions else None
@@ -282,9 +326,12 @@ def make_flash(source, machine=None, partitions=None):
         raise ValueError("--partitions is for an app .bin or a build directory; "
                          "a merged image or flash dump has its own table")
     if len(data) == FLASH_SIZE:
-        # Dumps may be encrypted or have no boot header. Preserve every byte.
+        # Full dumps are preserved byte-for-byte except for the explicitly
+        # selected X4 Classic LittleFS partition subtype compatibility fix.
         if machine:
             detect_chip(data, machine)
+        if machine == "x4classic":
+            data, _changed = normalize_x4classic_littlefs(data)
         return data
     chip = detect_chip(data, machine)
     if data[TABLE_OFFSET:TABLE_OFFSET + 2] == b'\xaa\x50':
@@ -299,7 +346,10 @@ def make_flash(source, machine=None, partitions=None):
         if not apps:
             raise ValueError('merged firmware has no matching application image')
         # Preserve the bundled bootloader, partition layout, and all app/data bytes.
-        return data.ljust(FLASH_SIZE, b'\xff')
+        image = data.ljust(FLASH_SIZE, b'\xff')
+        if machine == "x4classic":
+            image, _changed = normalize_x4classic_littlefs(image)
+        return image
     boot = (BOOT_DIR / f"bootloader-{CHIPS[chip][1]}.bin").read_bytes()
     if table is None:
         table = partition_table(BOOT_DIR / ("partitions-picco.csv" if machine == "picco" else "partitions-x4classic.csv" if machine == "x4classic" else "partitions-x4pro.csv" if machine == "x4pro" else "partitions.csv"))

@@ -145,6 +145,45 @@ globalThis.FlashImage = (() => {
         return boot.hashMismatch;
     }
 
+    /** Normalize the original X4 Classic ROM dump's LittleFS partition entry.
+        The stock table calls the partition "spiffs" but uses SPIFFS subtype
+        0x82; the stock app's LittleFS component requires subtype 0x83. The
+        original table is a known six-entry layout, so update its MD5 record
+        only after verifying the original checksum. The input is never mutated. */
+    function normalizeX4ClassicLittlefs(input) {
+        if (input.length !== 0x1000000) throw new Error('X4 Classic LittleFS normalization requires a 16 MiB flash image.');
+        const bytes = new Uint8Array(input);
+        const view = new DataView(bytes.buffer);
+        let target = -1, marker = -1;
+        for (let pos = 0x8000; pos < 0x8c00; pos += 32) {
+            const magic = view.getUint16(pos, true);
+            if (magic === 0xffff) break;
+            if (magic === 0xebeb) { marker = pos; break; }
+            if (magic !== 0x50aa) throw new Error('Invalid X4 Classic partition table.');
+            let end = pos + 12;
+            while (end < pos + 28 && bytes[end] !== 0) end++;
+            const label = new TextDecoder().decode(bytes.subarray(pos + 12, end));
+            if (label === 'spiffs') target = pos;
+        }
+        if (target < 0) return Object.freeze({flash: bytes, changed: false});
+        const kind = bytes[target + 2], subtype = bytes[target + 3];
+        const offset = view.getUint32(target + 4, true), size = view.getUint32(target + 8, true);
+        if (kind !== 1 || offset !== 0xFD0000 || size !== 0x14000) {
+            throw new Error('X4 Classic spiffs partition has unexpected type, offset or size; refusing to rewrite it.');
+        }
+        if (subtype === 0x83) return Object.freeze({flash: bytes, changed: false});
+        if (subtype !== 0x82 || marker !== 0x80c0) {
+            throw new Error('X4 Classic spiffs partition has an unexpected subtype or partition-table layout; refusing to rewrite it.');
+        }
+        const oldDigest = 'cdf6c703ad3f5cfd62194feec63a1c58';
+        const newDigest = 'f30d2781d72b1c5393ea00eb5b87289c';
+        const digest = [...bytes.subarray(marker + 16, marker + 32)].map(v => v.toString(16).padStart(2, '0')).join('');
+        if (digest !== oldDigest) throw new Error('X4 Classic partition-table MD5 is not the expected stock value; refusing to rewrite it.');
+        bytes[target + 3] = 0x83;
+        for (let i = 0; i < 16; i++) bytes[marker + 16 + i] = parseInt(newDigest.slice(i * 2, i * 2 + 2), 16);
+        return Object.freeze({flash: bytes, changed: true});
+    }
+
     function expandMerged(bytes) {
         if (bytes.length < 0x8002 || bytes[0] !== 0xe9 ||
             bytes[0x8000] !== 0xaa || bytes[0x8001] !== 0x50) return null;
@@ -174,5 +213,5 @@ globalThis.FlashImage = (() => {
             return false;
         });
     }
-    return Object.freeze({expandMerged, selectMachine, appLayout, composeApp, hasCStrings, validateEspImage, validateFlash});
+    return Object.freeze({expandMerged, selectMachine, appLayout, composeApp, hasCStrings, validateEspImage, validateFlash, normalizeX4ClassicLittlefs});
 })();

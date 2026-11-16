@@ -44,6 +44,8 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
     // its layout, bootloader and every app before passing it to QEMU.
     if (!FlashImage.expandMerged(bytes)) throw new Error('This 16 MiB file is not an ESP flash image: no bootloader or partition table.');
     const machine = FlashImage.selectMachine(chipOf(bytes), device);
+    const normalized = machine === 'x4classic' ? FlashImage.normalizeX4ClassicLittlefs(bytes) : { flash: bytes, changed: false };
+    bytes = normalized.flash;
     // The original X4 Classic ROM-read dump has a valid bootloader segment
     // checksum but a stale appended bootloader SHA-256. Tolerate that one
     // bootloader-only mismatch for this explicitly selected board; keep the
@@ -52,15 +54,18 @@ export async function prepareFlash(input: Uint8Array, device: string, panel: Set
       allowBootloaderHashMismatch: machine === 'x4classic',
     });
     const validationNote = bootloaderHashMismatch
-      ? 'Imported original X4 Classic 16 MiB flash dump unchanged; bootloader SHA-256 mismatch tolerated after checksum validation (application SHA-256 verified)'
+      ? 'Imported original X4 Classic 16 MiB dump; bootloader SHA-256 mismatch tolerated after checksum validation (application SHA-256 verified)'
       : null;
-    return { flash: bytes, machine, panel: panelForMachine(machine, panel), composed: false, composition: validationNote };
+    const composition = [normalized.changed ? 'Normalized X4 Classic spiffs partition subtype from SPIFFS (0x82) to LittleFS (0x83); filesystem bytes preserved' : null, validationNote].filter(Boolean).join('; ') || null;
+    return { flash: bytes, machine, panel: panelForMachine(machine, panel), composed: false, composition };
   }
   const merged = !xota && FlashImage.expandMerged(bytes);
   if (merged) {
     await FlashImage.validateFlash(merged);
     const machine = FlashImage.selectMachine(chipOf(merged), device);
-    return { flash: merged, machine, panel: panelForMachine(machine, panel), composed: false, composition: null };
+    const normalized = machine === 'x4classic' ? FlashImage.normalizeX4ClassicLittlefs(merged) : { flash: merged, changed: false };
+    return { flash: normalized.flash, machine, panel: panelForMachine(machine, panel), composed: false,
+      composition: normalized.changed ? 'Normalized X4 Classic spiffs partition subtype from SPIFFS (0x82) to LittleFS (0x83); filesystem bytes preserved' : null };
   }
   if (bytes.length < 24 || bytes[0] !== 0xe9) {
     throw new Error('Choose a firmware .bin, an X4 Pro .xota update, or a 16 MiB flash dump (16777216 bytes).');

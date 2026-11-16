@@ -151,3 +151,29 @@ test('merged Picco images preserve a populated recovery slot and original OTA se
     assert.deepEqual(expanded.subarray(0, merged.length), merged);
     assert.ok(expanded.subarray(merged.length).every(byte => byte === 255));
 });
+
+test('X4 Classic dump normalization changes only LittleFS subtype and table MD5', () => {
+    const flash = new Uint8Array(0x1000000).fill(0xff), view = new DataView(flash.buffer);
+    // Stock X4 Classic table records from the ROM-read dump.
+    const rows = [
+        [1, 2, 0x9000, 0x5000, 'nvs'], [1, 0, 0xe000, 0x2000, 'otadata'],
+        [0, 0x10, 0x10000, 0x7e0000, 'app0'], [0, 0x11, 0x7f0000, 0x7e0000, 'app1'],
+        [1, 0x82, 0xfd0000, 0x14000, 'spiffs'], [1, 3, 0xfe4000, 0x1c000, 'coredump']
+    ];
+    rows.forEach(([type, subtype, offset, size, label], i) => {
+        const pos = 0x8000 + i * 32;
+        view.setUint16(pos, 0x50aa, true); flash[pos + 2] = type; flash[pos + 3] = subtype;
+        view.setUint32(pos + 4, offset, true); view.setUint32(pos + 8, size, true);
+        flash.fill(0, pos + 12, pos + 28); flash.set(new TextEncoder().encode(label), pos + 12);
+    });
+    const marker = 0x80c0; view.setUint16(marker, 0xebeb, true);
+    flash.set(Buffer.from('cdf6c703ad3f5cfd62194feec63a1c58', 'hex'), marker + 16);
+    flash[0xfd0000] = 0x6c; // A byte of filesystem payload must remain unchanged.
+    const result = FlashImage.normalizeX4ClassicLittlefs(flash);
+    assert.equal(result.changed, true);
+    assert.equal(result.flash[0x8083], 0x83);
+    assert.equal(result.flash[0xfd0000], 0x6c);
+    assert.equal(flash[0x8083], 0x82, 'input buffer must not be mutated');
+    assert.equal(Buffer.from(result.flash.subarray(marker + 16, marker + 32)).toString('hex'), 'f30d2781d72b1c5393ea00eb5b87289c');
+    assert.equal(FlashImage.normalizeX4ClassicLittlefs(result.flash).changed, false);
+});

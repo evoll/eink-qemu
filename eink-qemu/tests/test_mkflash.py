@@ -57,6 +57,25 @@ class MkflashTest(unittest.TestCase):
         path.write_bytes(data)
         return path
 
+    def test_x4classic_full_dump_normalizes_littlefs_subtype_without_touching_payload(self):
+        image = bytearray(b'\xff' * mkflash.FLASH_SIZE)
+        table = bytearray(mkflash.partition_table(mkflash.BOOT_DIR / 'partitions-x4classic.csv'))
+        # Recreate the original ROM dump's SPIFFS subtype and valid MD5 record.
+        table[4 * mkflash.ENTRY.size + 3] = 0x82
+        marker = 6 * mkflash.ENTRY.size
+        table[marker + 16:marker + 32] = hashlib.md5(table[:marker]).digest()
+        image[mkflash.TABLE_OFFSET:mkflash.TABLE_OFFSET + mkflash.TABLE_SIZE] = table
+        image[0xFD0000:0xFE4000] = b'\x5a' * 0x14000
+        original_fs = bytes(image[0xFD0000:0xFE4000])
+        normalized, changed = mkflash.normalize_x4classic_littlefs(image)
+        self.assertTrue(changed)
+        self.assertEqual(normalized[0x8083], 0x83)
+        self.assertEqual(normalized[0xFD0000:0xFE4000], original_fs)
+        self.assertEqual(image[0x8083], 0x82)
+        again, changed_again = mkflash.normalize_x4classic_littlefs(normalized)
+        self.assertFalse(changed_again)
+        self.assertEqual(again, normalized)
+
     def test_partition_reference(self):
         # SHA256 of CrossPoint 1.6.5 .pio/build/default/partitions.bin, which
         # is Arduino-ESP32's default_16MB.csv.

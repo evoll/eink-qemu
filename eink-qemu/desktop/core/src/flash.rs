@@ -336,6 +336,40 @@ fn read_partitions(table: &[u8]) -> Result<Vec<Entry>, String> {
     Ok(parts.iter().map(|p| (p.kind, p.subtype, p.offset, p.size)).collect())
 }
 
+/// Correct the original X4 Classic ROM dump's LittleFS partition subtype.
+/// The filesystem label and payload stay untouched; only the subtype and the
+/// partition-table MD5 record are updated in the emulator's private copy.
+fn normalize_x4classic_littlefs(image: &mut [u8]) -> Result<bool, String> {
+    if image.len() != FLASH_SIZE { return Err("X4 Classic LittleFS normalization requires a 16 MiB flash image".into()); }
+    let table = &image[TABLE_OFFSET..TABLE_OFFSET + TABLE_SIZE];
+    read_partitions(table)?;
+    let mut target = None;
+    let mut marker = None;
+    for pos in (0..TABLE_SIZE).step_by(ENTRY_SIZE) {
+        let record = &table[pos..pos + ENTRY_SIZE];
+        if record.iter().all(|&b| b == 0xFF) { break; }
+        if record[..2] == [0xEB, 0xEB] { marker = Some(pos); break; }
+        if record[..2] != [0xAA, 0x50] { return Err("invalid X4 Classic partition table".into()); }
+        let name = record[12..28].iter().copied().take_while(|&b| b != 0).collect::<Vec<_>>();
+        if name == b"spiffs" {
+            let word = |at: usize| u32::from_le_bytes(record[at..at + 4].try_into().unwrap());
+            target = Some((pos, record[2], record[3], word(4), word(8)));
+        }
+    }
+    let Some((pos, kind, subtype, offset, size)) = target else { return Ok(false); };
+    if (kind, offset, size) != (1, 0xFD0000, 0x14000) {
+        return Err("X4 Classic spiffs partition has unexpected type, offset or size; refusing to rewrite it".into());
+    }
+    if subtype == 0x83 { return Ok(false); }
+    if subtype != 0x82 { return Err(format!("X4 Classic spiffs partition has unexpected subtype 0x{subtype:02x}; refusing to rewrite it")); }
+    let marker = marker.ok_or_else(|| "X4 Classic partition table has no MD5 record; refusing to rewrite it".to_string())?;
+    image[TABLE_OFFSET + pos + 3] = 0x83;
+    let digest = md5::Md5::digest(&image[TABLE_OFFSET..TABLE_OFFSET + marker]);
+    image[TABLE_OFFSET + marker + 16..TABLE_OFFSET + marker + 32].copy_from_slice(&digest);
+    read_partitions(&image[TABLE_OFFSET..TABLE_OFFSET + TABLE_SIZE])?;
+    Ok(true)
+}
+
 /// zlib's crc32 continued from `seed`, as the ESP-IDF NVS generator uses it.
 fn crc32(seed: u32, data: &[u8]) -> u32 {
     let mut crc = !seed;
@@ -521,13 +555,16 @@ pub fn make_flash_with(source: &Path, machine: Option<&str>, partitions: Option<
         return Err("--partitions is for an app .bin or a build directory; a merged image or flash dump has its own table".into());
     }
     if data.len() == FLASH_SIZE {
-        // Dumps may be encrypted or lack a boot header: every byte is kept.
-        // A named board must take the dump's chip, as mkflash.py checks.
+        // Preserve full dumps except for the explicitly selected X4 Classic
+        // LittleFS subtype compatibility correction.
         let chip = match machine {
             Some(_) => detect_chip(&data, machine)?,
             None => detect_chip(&data, None).unwrap_or(9),
         };
-        return Ok(Flash { image: data, chip, machine: pick(chip, source), app: None, kind: "dump", partitions: "the dump's own".into(), nvs_seed: None });
+        let board = pick(chip, source);
+        let mut image = data;
+        if board == "x4classic" { normalize_x4classic_littlefs(&mut image)?; }
+        return Ok(Flash { image, chip, machine: board, app: None, kind: "dump", partitions: "the dump's own".into(), nvs_seed: None });
     }
     let chip = detect_chip(&data, machine)?;
     if data.len() > TABLE_OFFSET + 2 && data[TABLE_OFFSET..TABLE_OFFSET + 2] == [0xAA, 0x50] {
@@ -547,7 +584,9 @@ pub fn make_flash_with(source: &Path, machine: Option<&str>, partitions: Option<
         }
         let mut image = data;
         image.resize(FLASH_SIZE, 0xFF);
-        return Ok(Flash { image, chip, machine: pick(chip, source), app: None, kind: "merged", partitions: "the image's own".into(), nvs_seed: None });
+        let board = pick(chip, source);
+        if board == "x4classic" { normalize_x4classic_littlefs(&mut image)?; }
+        return Ok(Flash { image, chip, machine: board, app: None, kind: "merged", partitions: "the image's own".into(), nvs_seed: None });
     }
     validate_app(&data)?;
     let board = pick(chip, source);
@@ -677,6 +716,24 @@ mod tests {
         // it continues from that value.
         assert_eq!(crc32(0, b"123456789"), 0xCBF4_3926);
         assert_eq!(crc32(0xFFFF_FFFF, b""), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn x4classic_dump_littlefs_subtype_is_normalized_and_payload_preserved() {
+        let mut image = vec![0xFF; FLASH_SIZE];
+        let mut table = partition_table(PARTITIONS_X4CLASSIC).unwrap();
+        let fs_entry = 4 * ENTRY_SIZE;
+        table[fs_entry + 3] = 0x82;
+        let marker = 6 * ENTRY_SIZE;
+        let digest = md5::Md5::digest(&table[..marker]);
+        table[marker + 16..marker + 32].copy_from_slice(&digest);
+        image[TABLE_OFFSET..TABLE_OFFSET + TABLE_SIZE].copy_from_slice(&table);
+        image[0xFD0000..0xFE4000].fill(0x5A);
+        assert!(normalize_x4classic_littlefs(&mut image).unwrap());
+        assert_eq!(image[TABLE_OFFSET + fs_entry + 3], 0x83);
+        assert!(image[0xFD0000..0xFE4000].iter().all(|&b| b == 0x5A));
+        assert!(!normalize_x4classic_littlefs(&mut image).unwrap());
+        assert!(read_partitions(&image[TABLE_OFFSET..TABLE_OFFSET + TABLE_SIZE]).is_ok());
     }
 
     #[test]
