@@ -24,6 +24,7 @@
 #include "qemu/log.h"
 #include "qemu/error-report.h"
 #include "hw/sd/dwc_sdmmc.h"
+#include "hw/sd/sd.h"
 #include "qapi/error.h"
 #include "hw/core/irq.h"
 #include "hw/core/qdev-properties.h"
@@ -239,7 +240,7 @@ static bool dwc_sdmmc_handle_cmd(DWCSDMMCState *s)
 {
     SDRequest request;
     bool success = true;
-    uint8_t resp[16];
+    uint8_t resp[16] = { 0 };
     size_t rlen;
     DEBUG("%s: hw_cmd=0x%08x\n", __func__, s->cmd);
     sdmmc_hw_cmd_t hw_cmd = dwc_sdmmc_get_hw_cmd(s);
@@ -250,7 +251,24 @@ static bool dwc_sdmmc_handle_cmd(DWCSDMMCState *s)
     request.cmd = hw_cmd.cmd_index;
     request.arg = s->pending ? s->active_cmdarg : s->cmdarg;
 
+    /* X4 Classic stock-vs-CrossPoint SDMMC diagnosis. Keep this trace in
+     * LOG_GUEST_ERROR so it is available in native and WASM console logs. */
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "DWC_SDMMC: CMD%u arg=0x%08x raw=0x%08x "
+                  "inserted=%d ctype=0x%08x clkdiv=0x%08x "
+                  "clkena=0x%08x clock=0x%08x bytcnt=%u blksiz=%u\n",
+                  request.cmd, request.arg, s->cmd,
+                  sdbus_get_inserted(&s->sdbus), s->ctype, s->clkdiv,
+                  s->clkena, s->clock, s->bytcnt, s->blksiz);
     rlen = sdbus_do_command(&s->sdbus, &request, resp, sizeof(resp));
+    qemu_log_mask(LOG_GUEST_ERROR,
+                  "DWC_SDMMC: CMD%u response_len=%zu response="
+                  "%02x%02x%02x%02x%02x%02x%02x%02x "
+                  "pending=%d data_phase=%d\n",
+                  request.cmd, rlen,
+                  resp[0], resp[1], resp[2], resp[3],
+                  resp[4], resp[5], resp[6], resp[7],
+                  s->pending, s->data_phase);
     s->rintsts |= SDMMC_INTMASK_CMD_DONE;
     if (hw_cmd.response_expect) {
         if (rlen == 4 && !hw_cmd.response_long) {
